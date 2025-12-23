@@ -1,0 +1,49 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / ReSharper
+.idea/
+*.sln.iml
+
+# Logs
+*.log
+logs/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+**/packages/*
+!**/packages/build/
+*.nuspec
+
+# Entity Framework
+Migrations/
+
+# Publish outputs
+publish/
+artifacts/
+
+# Cache
+.cache/
+
+# Local configuration
+appsettings.Development.json
+appsettings.Local.json
+*.Secret.json
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.DS_Store
+
+
