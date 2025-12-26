@@ -40,6 +40,11 @@ appsettings.Development.json
 appsettings.Local.json
 *.Secret.json
 
+# Environment files
+.env
+.env.local
+.env.*.local
+
 # OS files
 Thumbs.db
 ehthumbs.db

@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  database:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: leafgo-db
+    ports:
+      # Map cổng 14333 ở ngoài vào cổng 1433 ở trong
+      - "${MSSQL_PORT:-14333}:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      - MSSQL_PID=Developer
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    networks:
+      - leafgo-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C || exit 1',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: leafgo-api
+    env_file:
+      - ./backend/.env
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      # QUAN TRỌNG: Server=database,1433 (Luôn dùng cổng 1433 khi gọi nội bộ Docker)
+      # Không dùng biến ${MSSQL_PORT} ở đây vì nó sẽ lấy số 14333 -> gây lỗi kết nối nội bộ
+      - ConnectionStrings__DefaultConnection=Server=${MSSQL_SERVER:-database},1433;Database=${MSSQL_DATABASE_NAME:-LeafGoDB};User Id=${MSSQL_USER:-sa};Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - leafgo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Truyền URL backend vào lúc build frontend
+        - VITE_API_URL=${BACKEND_API_URL:-http://localhost:8080}
+        - VITE_NOMINATIM_API=${VITE_NOMINATIM_API:-https://nominatim.openstreetmap.org}
+        - VITE_ORS_API=${VITE_ORS_API:-https://api.openrouteservice.org/v2}
+        - VITE_ORS_API_KEY=${VITE_ORS_API_KEY:-}
+    container_name: leafgo-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - leafgo-network
+    restart: unless-stopped
+
+volumes:
+  sqlserver-data:
+
+networks:
+  leafgo-network:
+    driver: bridge

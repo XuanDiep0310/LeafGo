@@ -20,8 +20,10 @@ namespace LeafGo.API
             {
                 app.MapOpenApi();
             }
-
-            app.UseHttpsRedirection();
+            else
+            {
+                app.UseHttpsRedirection();
+            }
 
             app.UseAuthorization();
 
