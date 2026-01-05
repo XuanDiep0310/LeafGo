@@ -4,8 +4,9 @@ import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { Provider, useDispatch } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, App as AntdApp } from "antd";
 import viVN from "antd/locale/vi_VN";
+
 import App from "./App";
 import { store } from "./store";
 import { restoreSession } from "./store/slices/authSlice";
@@ -19,7 +20,11 @@ function AppWithSessionRestore() {
     dispatch(restoreSession());
   }, [dispatch]);
 
-  return <App />;
+  return (
+    <AntdApp>
+      <App />
+    </AntdApp>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(

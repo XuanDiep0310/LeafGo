@@ -10,9 +10,8 @@ import {
   Polyline,
   useMap,
 } from "react-leaflet";
-import { AutoComplete, Card, Modal, Select } from "antd";
+import { AutoComplete, Card, Modal, Select, Button } from "antd";
 import { MapPin, Navigation, ArrowLeftRight, Crosshair } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   setPickupLocation,
   setDropoffLocation,
@@ -473,8 +472,8 @@ export default function BookingPage() {
             {loadingRoute
               ? "Đang tính toán..."
               : routeConfirmed
-              ? "✓ Đã xác nhận"
-              : "Xác nhận"}
+                ? "✓ Đã xác nhận"
+                : "Xác nhận"}
           </Button>
           {routeConfirmed && (
             <Button
