@@ -123,9 +123,14 @@ namespace LeafGo.API
 
             // Application Services
             builder.Services.AddScoped<IAuthService, AuthService>();
+            builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddScoped<IJwtService, JwtService>();
             builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
             builder.Services.AddScoped<IEmailService, EmailService>();
+            builder.Services.AddScoped<IFileService, LocalFileService>();
+
+            // Add IWebHostEnvironment for file service
+            builder.Services.AddSingleton<IWebHostEnvironment>(builder.Environment);
 
             // FluentValidation
             builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
@@ -159,6 +164,9 @@ namespace LeafGo.API
             }
 
             app.UseHttpsRedirection();
+
+            // Serve static files for uploaded avatars
+            app.UseStaticFiles();
 
             // Add exception handling middleware
             app.UseMiddleware<ExceptionHandlingMiddleware>();
