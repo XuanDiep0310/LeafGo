@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
-import { Form, Input, Button, Card, Select, message } from "antd";
+import { Form, Input, Button, Card, Select, App } from "antd"; // ✅ Thêm App
 import { Leaf } from "lucide-react";
 import { register, clearError } from "../../store/slices/authSlice";
 
@@ -13,6 +13,7 @@ const { Option } = Select;
 export default function RegisterPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { message } = App.useApp(); // ✅ Dùng hook
   const { loading, error, isAuthenticated } = useSelector(
     (state) => state.auth
   );
@@ -28,11 +29,16 @@ export default function RegisterPage() {
       message.error(error);
       dispatch(clearError());
     }
-  }, [error, dispatch]);
+  }, [error, dispatch, message]); // ✅ Thêm message vào dependency
 
   // FR-01: Handle register
   const handleRegister = async (values) => {
-    await dispatch(register(values));
+    try {
+      await dispatch(register(values)).unwrap();
+      message.success("Đăng ký thành công!");
+    } catch (err) {
+      console.error("Register error:", err);
+    }
   };
 
   return (
@@ -91,11 +97,11 @@ export default function RegisterPage() {
             label="Vai trò"
             name="role"
             rules={[{ required: true, message: "Vui lòng chọn vai trò" }]}
-            initialValue="user"
+            initialValue="User"
           >
             <Select>
-              <Option value="user">Khách hàng</Option>
-              <Option value="driver">Tài xế</Option>
+              <Option value="User">Khách hàng</Option>
+              <Option value="Driver">Tài xế</Option>
             </Select>
           </Form.Item>
 

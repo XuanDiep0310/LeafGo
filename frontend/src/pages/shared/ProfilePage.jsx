@@ -15,7 +15,6 @@ import {
 } from "antd";
 import { User, Lock, Save, Upload as UploadIcon, Car } from "lucide-react";
 import { updateProfile, changePassword } from "../../store/slices/authSlice";
-import { mockApi } from "../../services/mockData";
 
 const { TabPane } = Tabs;
 

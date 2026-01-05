@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSelector } from "react-redux";
-import { Card, Switch, message, Modal, Tag, List } from "antd";
+import { Card, Switch, message, Modal, Tag, List, Button } from "antd";
 import {
   Power,
   Bell,
@@ -13,7 +13,6 @@ import {
   User,
   Clock,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { mockApi } from "../../services/mockData";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -139,14 +138,12 @@ export default function WorkplacePage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                isOnline ? "bg-primary/10" : "bg-muted"
-              }`}
+              className={`w-12 h-12 rounded-full flex items-center justify-center ${isOnline ? "bg-primary/10" : "bg-muted"
+                }`}
             >
               <Power
-                className={`w-6 h-6 ${
-                  isOnline ? "text-primary" : "text-muted-foreground"
-                }`}
+                className={`w-6 h-6 ${isOnline ? "text-primary" : "text-muted-foreground"
+                  }`}
               />
             </div>
             <div>

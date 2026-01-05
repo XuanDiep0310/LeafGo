@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchTripHistory, rateTrip } from "../../store/slices/bookingSlice";
-import { Card, Empty, Rate, Modal, Input, message, Tag } from "antd";
+import { Card, Empty, Rate, Modal, Input, message, Tag, Button } from "antd";
 import {
   Calendar,
   MapPin,
@@ -14,7 +14,6 @@ import {
   Phone,
   Car,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 
@@ -180,11 +179,10 @@ export default function HistoryPage() {
                         {[...Array(5)].map((_, i) => (
                           <Star
                             key={i}
-                            className={`w-4 h-4 ${
-                              i < trip.rating
+                            className={`w-4 h-4 ${i < trip.rating
                                 ? "text-yellow-400 fill-yellow-400"
                                 : "text-gray-300"
-                            }`}
+                              }`}
                           />
                         ))}
                       </div>
@@ -240,11 +238,10 @@ export default function HistoryPage() {
                   className="transition-transform hover:scale-110"
                 >
                   <Star
-                    className={`w-10 h-10 ${
-                      value <= rating
+                    className={`w-10 h-10 ${value <= rating
                         ? "text-yellow-400 fill-yellow-400"
                         : "text-gray-300"
-                    }`}
+                      }`}
                   />
                 </button>
               ))}

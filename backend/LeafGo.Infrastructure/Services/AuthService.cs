@@ -85,19 +85,34 @@ namespace LeafGo.Infrastructure.Services
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request, string? ipAddress)
         {
-            // Find user by email
-            var user = await _context.Set<User>()
-                .FirstOrDefaultAsync(u => u.Email == request.Email && !u.IsDeleted);
+            // Validate that either email or phone is provided
+            if (string.IsNullOrWhiteSpace(request.Email) && string.IsNullOrWhiteSpace(request.PhoneNumber))
+            {
+                throw new InvalidOperationException("Either email or phone number must be provided");
+            }
+
+            // Find user by email or phone number
+            User? user = null;
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                user = await _context.Set<User>()
+                    .FirstOrDefaultAsync(u => u.Email == request.Email && !u.IsDeleted);
+            }
+            else if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+            {
+                user = await _context.Set<User>()
+                    .FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber && !u.IsDeleted);
+            }
 
             if (user == null)
             {
-                throw new UnauthorizedAccessException("Invalid email or password");
+                throw new UnauthorizedAccessException("Invalid email/phone or password");
             }
 
             // Verify password
             if (!_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
             {
-                throw new UnauthorizedAccessException("Invalid email or password");
+                throw new UnauthorizedAccessException("Invalid email/phone or password");
             }
 
             // Check if account is active

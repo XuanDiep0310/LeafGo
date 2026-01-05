@@ -1,149 +1,255 @@
-import { mockApi } from "./mockData";
+import {
+  login as apiLogin,
+  register as apiRegister,
+  forgotPassword as apiForgotPassword,
+  resetPassword as apiResetPassword,
+  changePassword as apiChangePassword,
+  getUserProfile as apiGetUserProfile,
+  updateUserProfile as apiUpdateUserProfile,
+} from "./apiClient";
 
-// Simulates backend authentication
-// Implements FR-01, FR-02
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
+// Adapter around backend Auth API to match app's expected shapes
 export const authService = {
-  // FR-01: Login functionality - using phone number instead of username
-  login: async (phone, password) => {
-    await delay(1000); // Simulate network delay
+  login: async (phoneOrEmail, password) => {
+    try {
+      // Validate input
+      if (!phoneOrEmail || !password) {
+        throw new Error("Vui lòng nhập đầy đủ thông tin đăng nhập");
+      }
 
-    const users = await mockApi.getAllUsers();
-    const user = users.find(
-      (u) => u.phone === phone && u.password === password
-    );
+      console.log("🔍 Login attempt:", { phoneOrEmail, password: "***" }); // Debug
 
-    if (!user) {
-      throw new Error("Số điện thoại hoặc mật khẩu không đúng");
+      // Backend yêu cầu CẢ email VÀ phoneNumber, để empty string nếu không có
+      const isEmail = String(phoneOrEmail).includes("@");
+      const payload = {
+        email: isEmail ? phoneOrEmail : "",
+        phoneNumber: isEmail ? "" : phoneOrEmail,
+        password
+      };
+
+      console.log("📤 Payload sent:", payload); // Debug
+
+      const res = await apiLogin(payload);
+
+      console.log("✅ Login response:", res); // Debug
+
+      // res should be the API wrapper response: { success, message, data }
+      if (!res.success) {
+        throw new Error(res.message || "Đăng nhập thất bại");
+      }
+
+      const d = res.data;
+
+      // Transform to app's user format matching mockDatabase structure
+      const user = {
+        id: d.id,
+        username: d.email || d.phoneNumber,
+        email: d.email,
+        fullName: d.fullName,
+        phone: d.phoneNumber,
+        role: d.role,
+        balance: d.balance || 0,
+        avatar: d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
+        isActive: d.isActive !== false,
+        isOnline: d.isOnline,
+        createdAt: d.createdAt || new Date().toISOString(), // ✅ FIX: Use ISO string
+        // Include driver-specific fields if present
+        ...(d.vehicleInfo && { vehicleInfo: d.vehicleInfo }),
+        ...(d.driverStatus && { driverStatus: d.driverStatus }),
+        ...(d.rating && { rating: d.rating }),
+        ...(d.totalTrips && { totalTrips: d.totalTrips }),
+      };
+
+      // Store user data
+      localStorage.setItem("user", JSON.stringify(user));
+
+      return {
+        user,
+        token: d.accessToken || null,
+      };
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || "Đăng nhập thất bại";
+      throw new Error(message);
     }
-
-    if (!user.isActive) {
-      throw new Error("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên");
-    }
-
-    // Don't return password
-    const { password: _, ...userWithoutPassword } = user;
-    return {
-      user: userWithoutPassword,
-      token: `mock_token_${user.id}`,
-    };
   },
 
-  // FR-01: Register functionality (User/Driver only)
   register: async (userData) => {
-    await delay(1000);
+    try {
+      // Transform userData to match backend API format
+      const payload = {
+        email: userData.email,
+        password: userData.password,
+        fullName: userData.fullName,
+        phoneNumber: userData.phone || userData.phoneNumber,
+        role: userData.role || "user",
+      };
 
-    const users = await mockApi.getAllUsers();
-    const existingUser = users.find(
-      (u) => u.email === userData.email || u.phone === userData.phone
-    );
+      const res = await apiRegister(payload);
 
-    if (existingUser) {
-      throw new Error("Email hoặc số điện thoại đã tồn tại");
+      if (!res.success) {
+        throw new Error(res.message || "Đăng ký thất bại");
+      }
+
+      const d = res.data;
+
+      const user = {
+        id: d.id,
+        username: d.email || d.phoneNumber,
+        email: d.email,
+        fullName: d.fullName,
+        phone: d.phoneNumber,
+        role: d.role,
+        balance: d.balance || 0,
+        avatar: d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
+        isActive: d.isActive !== false,
+        isOnline: d.isOnline,
+        createdAt: d.createdAt || new Date().toISOString(), // ✅ FIX: Use ISO string
+      };
+
+      localStorage.setItem("user", JSON.stringify(user));
+
+      return {
+        user,
+        token: d.accessToken || null,
+      };
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || "Đăng ký thất bại";
+      throw new Error(message);
     }
-
-    // Admin cannot register through public form
-    if (userData.role === "admin") {
-      throw new Error("Không thể đăng ký tài khoản admin");
-    }
-
-    // Auto-generate username from phone number
-    const generatedUsername = `user_${userData.phone.replace(/[^0-9]/g, "")}`;
-    const registerData = {
-      ...userData,
-      username: generatedUsername,
-    };
-
-    const newUser = await mockApi.createUser(registerData);
-    const { password: _, ...userWithoutPassword } = newUser;
-    return {
-      user: userWithoutPassword,
-      token: `mock_token_${newUser.id}`,
-    };
   },
 
-  // FR-02: Forgot password - Step 1: Send OTP
   sendResetPasswordOTP: async (email) => {
-    await delay(1000);
+    try {
+      // Backend provides forgot-password endpoint
+      const res = await apiForgotPassword({ email });
 
-    const users = await mockApi.getAllUsers();
-    const user = users.find((u) => u.email === email);
+      if (!res.success) {
+        throw new Error(res.message || "Gửi mã xác thực thất bại");
+      }
 
-    if (!user) {
-      throw new Error("Email không tồn tại trong hệ thống");
+      return res;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || "Gửi mã xác thực thất bại";
+      throw new Error(message);
     }
-
-    // Simulate sending OTP (in real app, this would send to email)
-    const otp = "123456"; // Mock OTP
-    console.log(`[Mock] OTP gửi đến ${email}: ${otp}`);
-
-    return {
-      success: true,
-      message: "Mã OTP đã được gửi đến email của bạn",
-      mockOtp: otp, // For testing purposes
-    };
   },
 
-  // FR-02: Forgot password - Step 2: Reset password with OTP
-  resetPasswordWithOTP: async (email, otp, newPassword) => {
-    await delay(1000);
+  resetPasswordWithOTP: async (email, token, newPassword) => {
+    try {
+      // Backend expects { token, newPassword }
+      const res = await apiResetPassword({ token, newPassword });
 
-    // Verify OTP (in real app, this would check against stored OTP)
-    if (otp !== "123456") {
-      throw new Error("Mã OTP không đúng");
+      if (!res.success) {
+        throw new Error(res.message || "Đặt lại mật khẩu thất bại");
+      }
+
+      return res;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || "Đặt lại mật khẩu thất bại";
+      throw new Error(message);
     }
-
-    const users = await mockApi.getAllUsers();
-    const user = users.find((u) => u.email === email);
-
-    if (!user) {
-      throw new Error("Email không tồn tại");
-    }
-
-    // Update password
-    await mockApi.updateUser(user.id, { password: newPassword });
-
-    return {
-      success: true,
-      message: "Mật khẩu đã được đặt lại thành công",
-    };
   },
 
-  // FR-02: Change password (from profile)
-  changePassword: async (userId, oldPassword, newPassword) => {
-    await delay(1000);
+  changePassword: async (_userId, currentPassword, newPassword) => {
+    try {
+      // Backend expects { currentPassword, newPassword } and infers user from auth
+      const res = await apiChangePassword({ currentPassword, newPassword });
 
-    const user = await mockApi.getUserById(userId);
+      if (!res.success) {
+        throw new Error(res.message || "Đổi mật khẩu thất bại");
+      }
 
-    if (!user) {
-      throw new Error("Người dùng không tồn tại");
+      return res;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || "Đổi mật khẩu thất bại";
+      throw new Error(message);
     }
-
-    if (user.password !== oldPassword) {
-      throw new Error("Mật khẩu cũ không đúng");
-    }
-
-    await mockApi.updateUser(userId, { password: newPassword });
-
-    return {
-      success: true,
-      message: "Đổi mật khẩu thành công",
-    };
   },
 
-  // FR-54, FR-04: Update profile
+  // Keep updateProfile using existing mock for now (no public API defined in prompt)
   updateProfile: async (userId, profileData) => {
-    await delay(1000);
+    try {
+      // Try backend API first if available
+      const res = await apiUpdateUserProfile(profileData);
 
-    const updatedUser = await mockApi.updateUser(userId, profileData);
+      if (res.success) {
+        const d = res.data;
+        const updatedUser = {
+          id: d.id,
+          username: d.email || d.phoneNumber,
+          email: d.email,
+          fullName: d.fullName,
+          phone: d.phoneNumber,
+          role: d.role,
+          balance: d.balance || 0,
+          avatar: d.avatar,
+          isActive: d.isActive !== false,
+          isOnline: d.isOnline,
+          createdAt: d.createdAt, // ✅ Giữ nguyên từ API (đã là string)
+          ...(d.vehicleInfo && { vehicleInfo: d.vehicleInfo }),
+          ...(d.driverStatus && { driverStatus: d.driverStatus }),
+          ...(d.rating && { rating: d.rating }),
+          ...(d.totalTrips && { totalTrips: d.totalTrips }),
+        };
 
-    if (!updatedUser) {
-      throw new Error("Cập nhật thất bại");
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        return updatedUser;
+      }
+    } catch (error) {
+      console.warn("Backend update not available, using localStorage:", error.message);
     }
 
-    const { password: _, ...userWithoutPassword } = updatedUser;
-    return userWithoutPassword;
+    // Fallback to local update via existing stored user
+    const userStr = localStorage.getItem("user");
+    if (!userStr) throw new Error("No user in localStorage");
+
+    const user = JSON.parse(userStr);
+    const updated = { ...user, ...profileData };
+    localStorage.setItem("user", JSON.stringify(updated));
+
+    return updated;
+  },
+
+  getUserProfile: async () => {
+    try {
+      const res = await apiGetUserProfile();
+
+      if (!res.success) {
+        throw new Error(res.message || "Lấy thông tin người dùng thất bại");
+      }
+
+      const d = res.data;
+
+      const user = {
+        id: d.id,
+        username: d.email || d.phoneNumber,
+        email: d.email,
+        fullName: d.fullName,
+        phone: d.phoneNumber,
+        role: d.role,
+        balance: d.balance || 0,
+        avatar: d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
+        isActive: d.isActive !== false,
+        isOnline: d.isOnline,
+        createdAt: d.createdAt, // ✅ Giữ nguyên từ API (đã là string)
+        ...(d.vehicleInfo && { vehicleInfo: d.vehicleInfo }),
+        ...(d.driverStatus && { driverStatus: d.driverStatus }),
+        ...(d.rating && { rating: d.rating }),
+        ...(d.totalTrips && { totalTrips: d.totalTrips }),
+      };
+
+      localStorage.setItem("user", JSON.stringify(user));
+      return user;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || "Lấy thông tin người dùng thất bại";
+      throw new Error(message);
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("expiresAt");
+    localStorage.removeItem("user");
   },
 };

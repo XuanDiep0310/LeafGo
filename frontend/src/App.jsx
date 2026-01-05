@@ -35,7 +35,7 @@ const PrivateRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />
   }
 
-  if (allowedRoles && !allowedRoles.includes(user?.role)) {
+  if (allowedRoles && !allowedRoles.includes(user?.role?.toLowerCase())) {
     return <Navigate to="/" replace />
   }
 
@@ -48,9 +48,12 @@ function App() {
   // Redirect root based on role
   const getRootRedirect = () => {
     if (!isAuthenticated) return "/login"
-    if (user?.role === "user") return "/user/booking"
-    if (user?.role === "driver") return "/driver/workplace"
-    if (user?.role === "admin") return "/admin/dashboard"
+
+    const role = user?.role?.toLowerCase(); // Chuẩn hóa
+
+    if (role === "user") return "/user/booking"
+    if (role === "driver") return "/driver/workplace"
+    if (role === "admin") return "/admin/dashboard"
     return "/login"
   }
 
