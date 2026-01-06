@@ -4,25 +4,36 @@ import { authService } from "../../services/authService";
 // Implements FR-01, FR-02, FR-04, FR-54
 
 const initialState = {
-  user: null,
-  token: null,
-  isAuthenticated: false,
+  user: JSON.parse(localStorage.getItem("user")) || null,
+  token: localStorage.getItem("accessToken") || null,
+  isAuthenticated: !!localStorage.getItem("accessToken"),
   loading: false,
   error: null,
 };
 
 // Async thunks
-// FR-01: Login
+// FR-01: Login - supports both email and phone
 export const login = createAsyncThunk(
   "auth/login",
-  async ({ phone, password }, { rejectWithValue }) => {
+  async (credentials, { rejectWithValue }) => {
     try {
-      const response = await authService.login(phone, password);
-      localStorage.setItem("token", response.token);
+      // Support multiple formats: { phone, password } or { phoneOrEmail, password }
+      const phoneOrEmail = credentials.phoneOrEmail || credentials.phone || credentials.email;
+      const password = credentials.password;
+
+      if (!phoneOrEmail || !password) {
+        throw new Error("Vui lòng nhập đầy đủ thông tin đăng nhập");
+      }
+
+      const response = await authService.login(phoneOrEmail, password);
+
+      // Tokens are already stored in authService.login
+      // Just store user in localStorage for backward compatibility
       localStorage.setItem("user", JSON.stringify(response.user));
+
       return response;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.message || "Đăng nhập thất bại");
     }
   }
 );
@@ -33,16 +44,18 @@ export const register = createAsyncThunk(
   async (userData, { rejectWithValue }) => {
     try {
       const response = await authService.register(userData);
-      localStorage.setItem("token", response.token);
+
+      // Tokens are already stored in authService.register
       localStorage.setItem("user", JSON.stringify(response.user));
+
       return response;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.message || "Đăng ký thất bại");
     }
   }
 );
 
-// FR-02: Send OTP for password reset
+// Sửa sendResetPasswordOTP thunk
 export const sendResetPasswordOTP = createAsyncThunk(
   "auth/sendResetPasswordOTP",
   async (email, { rejectWithValue }) => {
@@ -55,14 +68,14 @@ export const sendResetPasswordOTP = createAsyncThunk(
   }
 );
 
-// FR-02: Reset password with OTP
+// Sửa resetPasswordWithOTP thunk - nhận object thay vì 3 params riêng
 export const resetPasswordWithOTP = createAsyncThunk(
   "auth/resetPasswordWithOTP",
-  async ({ email, otp, newPassword }, { rejectWithValue }) => {
+  async ({ email, token, newPassword }, { rejectWithValue }) => {
     try {
       const response = await authService.resetPasswordWithOTP(
         email,
-        otp,
+        token,
         newPassword
       );
       return response;
@@ -75,16 +88,18 @@ export const resetPasswordWithOTP = createAsyncThunk(
 // FR-02: Change password
 export const changePassword = createAsyncThunk(
   "auth/changePassword",
-  async ({ userId, oldPassword, newPassword }, { rejectWithValue }) => {
+  async ({ userId, oldPassword, currentPassword, newPassword }, { rejectWithValue }) => {
     try {
+      // Support both 'oldPassword' and 'currentPassword' parameter names
+      const current = currentPassword || oldPassword;
       const response = await authService.changePassword(
         userId,
-        oldPassword,
+        current,
         newPassword
       );
       return response;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.message || "Đổi mật khẩu thất bại");
     }
   }
 );
@@ -98,7 +113,21 @@ export const updateProfile = createAsyncThunk(
       localStorage.setItem("user", JSON.stringify(updatedUser));
       return updatedUser;
     } catch (error) {
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.message || "Cập nhật thông tin thất bại");
+    }
+  }
+);
+
+// Get user profile from backend
+export const getUserProfile = createAsyncThunk(
+  "auth/getUserProfile",
+  async (_, { rejectWithValue }) => {
+    try {
+      const user = await authService.getUserProfile();
+      localStorage.setItem("user", JSON.stringify(user));
+      return user;
+    } catch (error) {
+      return rejectWithValue(error.message || "Lấy thông tin người dùng thất bại");
     }
   }
 );
@@ -112,21 +141,33 @@ const authSlice = createSlice({
       state.user = null;
       state.token = null;
       state.isAuthenticated = false;
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+
+      // Clear all auth data
+      authService.logout();
     },
+
     // Restore session from localStorage
     restoreSession: (state) => {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const user = localStorage.getItem("user");
+
       if (token && user) {
         state.token = token;
         state.user = JSON.parse(user);
         state.isAuthenticated = true;
       }
     },
+
     clearError: (state) => {
       state.error = null;
+    },
+
+    // Update user data in state
+    setUser: (state, action) => {
+      state.user = action.payload;
+      if (action.payload) {
+        localStorage.setItem("user", JSON.stringify(action.payload));
+      }
     },
   },
   extraReducers: (builder) => {
@@ -141,11 +182,14 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
+        state.error = null;
       })
       .addCase(login.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.isAuthenticated = false;
       })
+
       // Register
       .addCase(register.pending, (state) => {
         state.loading = true;
@@ -156,11 +200,13 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
+        state.error = null;
       })
       .addCase(register.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
+
       // Send Reset Password OTP
       .addCase(sendResetPasswordOTP.pending, (state) => {
         state.loading = true;
@@ -168,11 +214,13 @@ const authSlice = createSlice({
       })
       .addCase(sendResetPasswordOTP.fulfilled, (state) => {
         state.loading = false;
+        state.error = null;
       })
       .addCase(sendResetPasswordOTP.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
+
       // Reset Password
       .addCase(resetPasswordWithOTP.pending, (state) => {
         state.loading = true;
@@ -180,11 +228,13 @@ const authSlice = createSlice({
       })
       .addCase(resetPasswordWithOTP.fulfilled, (state) => {
         state.loading = false;
+        state.error = null;
       })
       .addCase(resetPasswordWithOTP.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
+
       // Change Password
       .addCase(changePassword.pending, (state) => {
         state.loading = true;
@@ -192,11 +242,13 @@ const authSlice = createSlice({
       })
       .addCase(changePassword.fulfilled, (state) => {
         state.loading = false;
+        state.error = null;
       })
       .addCase(changePassword.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
+
       // Update Profile
       .addCase(updateProfile.pending, (state) => {
         state.loading = true;
@@ -205,13 +257,29 @@ const authSlice = createSlice({
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload;
+        state.error = null;
       })
       .addCase(updateProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // Get User Profile
+      .addCase(getUserProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getUserProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(getUserProfile.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });
   },
 });
 
-export const { logout, restoreSession, clearError } = authSlice.actions;
+export const { logout, restoreSession, clearError, setUser } = authSlice.actions;
 export default authSlice.reducer;

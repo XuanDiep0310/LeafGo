@@ -3,37 +3,52 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
-import { Form, Input, Button, Card, message } from "antd";
+import { Form, Input, Button, Card, App } from "antd"; // ✅ Thêm App
 import { Leaf } from "lucide-react";
 import { login, clearError } from "../../store/slices/authSlice";
 
-// Implements FR-01
+// Implements FR-01: User Login
 export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { message } = App.useApp(); // ✅ Dùng hook này thay vì import message
   const { loading, error, isAuthenticated, user } = useSelector(
     (state) => state.auth
   );
 
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      // Redirect based on role
-      if (user.role === "user") navigate("/user/booking");
-      else if (user.role === "driver") navigate("/driver/workplace");
-      else if (user.role === "admin") navigate("/admin/dashboard");
-    }
-  }, [isAuthenticated, user, navigate]);
-
+  // Display error messages
   useEffect(() => {
     if (error) {
       message.error(error);
       dispatch(clearError());
     }
-  }, [error, dispatch]);
+  }, [error, dispatch, message]);
 
-  // FR-01: Handle login
+  // Redirect after successful login
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      // ✅ Sửa logic: toLowerCase() rồi mới so sánh
+      const role = user.role.toLowerCase();
+
+      if (role === "user") navigate("/user/booking");
+      else if (role === "driver") navigate("/driver/workplace");
+      else if (role === "admin") navigate("/admin/dashboard");
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  // Handle login
   const handleLogin = async (values) => {
-    await dispatch(login(values));
+    try {
+      await dispatch(login({
+        phoneOrEmail: values.phoneOrEmail,
+        password: values.password
+      })).unwrap();
+
+      message.success("Đăng nhập thành công!");
+    } catch (err) {
+      // Error already handled by useEffect above
+      console.error("Login error:", err);
+    }
   };
 
   return (
@@ -51,17 +66,22 @@ export default function LoginPage() {
 
         <Form layout="vertical" onFinish={handleLogin} size="large">
           <Form.Item
-            label="Số điện thoại"
-            name="phone"
-            rules={[{ required: true, message: "Vui lòng nhập số điện thoại" }]}
+            label="Email hoặc Số điện thoại"
+            name="phoneOrEmail"
+            rules={[
+              { required: true, message: "Vui lòng nhập email hoặc số điện thoại" }
+            ]}
           >
-            <Input placeholder="0123456789" />
+            <Input placeholder="email@example.com hoặc 0123456789" />
           </Form.Item>
 
           <Form.Item
             label="Mật khẩu"
             name="password"
-            rules={[{ required: true, message: "Vui lòng nhập mật khẩu" }]}
+            rules={[
+              { required: true, message: "Vui lòng nhập mật khẩu" },
+              { min: 6, message: "Mật khẩu phải có ít nhất 6 ký tự" }
+            ]}
           >
             <Input.Password placeholder="Nhập mật khẩu" />
           </Form.Item>
@@ -72,8 +92,9 @@ export default function LoginPage() {
               htmlType="submit"
               loading={loading}
               className="w-full"
+              disabled={loading}
             >
-              Đăng nhập
+              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
             </Button>
           </Form.Item>
         </Form>
@@ -95,9 +116,9 @@ export default function LoginPage() {
 
         <div className="mt-6 p-4 bg-accent rounded-lg text-sm text-muted-foreground">
           <p className="font-semibold mb-2">Tài khoản demo:</p>
-          <p>• Khách hàng: 0123456789 / 123456</p>
-          <p>• Tài xế: 0987654321 / 123456</p>
-          <p>• Admin: 0909090909 / admin123</p>
+          <p>• Admin: admin@leafgo.com / Admin@123</p>
+          <p>• Tài xế: driver@leafgo.com / Test@123456</p>
+          <p>• Khách hàng: user@leafgo.com / Test@123456</p>
         </div>
       </Card>
     </div>
