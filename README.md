@@ -98,8 +98,8 @@ dotnet run --project LeafGo.API
 
 * [x] UI/UX Design & Frontend Implementation (Mock Data)
 * [x] Backend Scaffolding (Clean Architecture)
-* [ ] Database Implementation (EF Core)
-* [ ] Authentication (JWT & Identity)
+* [x] Database Implementation (EF Core)
+* [x] Authentication (JWT & Identity)
 * [ ] Real-time Communication (SignalR)
 * [ ] Payment Gateway Integration
 
