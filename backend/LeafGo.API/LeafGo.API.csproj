@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -21,6 +21,10 @@
     <ProjectReference Include="..\LeafGo.Application\LeafGo.Application.csproj" />
     <ProjectReference Include="..\LeafGo.Domain\LeafGo.Domain.csproj" />
     <ProjectReference Include="..\LeafGo.Infrastructure\LeafGo.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\uploads\avatars\" />
   </ItemGroup>
 
 </Project>
