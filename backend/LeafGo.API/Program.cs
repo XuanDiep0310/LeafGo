@@ -128,6 +128,7 @@ namespace LeafGo.API
             builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
             builder.Services.AddScoped<IEmailService, EmailService>();
             builder.Services.AddScoped<IFileService, LocalFileService>();
+            builder.Services.AddScoped<IDriverService, DriverService>();
 
             // Add IWebHostEnvironment for file service
             builder.Services.AddSingleton<IWebHostEnvironment>(builder.Environment);
