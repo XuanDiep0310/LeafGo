@@ -262,5 +262,144 @@ namespace LeafGo.API.Controllers
         }
 
         #endregion
+
+        #region Vehicle Type Management
+
+        /// <summary>
+        /// Get all vehicle types
+        /// </summary>
+        [AllowAnonymous]
+        [Authorize(Roles = $"{UserRoles.Admin},{UserRoles.Driver}")]
+        [HttpGet("vehicle-types")]
+        [ProducesResponseType(typeof(ApiResponse<List<VehicleTypeResponse>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetVehicleTypes()
+        {
+            try
+            {
+                var vehicleTypes = await _adminService.GetVehicleTypesAsync();
+                return Ok(ApiResponse<List<VehicleTypeResponse>>.SuccessResponse(
+                    vehicleTypes,
+                    "Vehicle types retrieved successfully"
+                ));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting vehicle types");
+                return StatusCode(500, new ErrorResponse { Error = "An error occurred" });
+            }
+        }
+
+        /// <summary>
+        /// Get vehicle type by ID
+        /// </summary>
+        [AllowAnonymous]
+        [Authorize(Roles = $"{UserRoles.Admin},{UserRoles.Driver}")]
+        [HttpGet("vehicle-types/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<VehicleTypeResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetVehicleTypeById(Guid id)
+        {
+            try
+            {
+                var vehicleType = await _adminService.GetVehicleTypeByIdAsync(id);
+                return Ok(ApiResponse<VehicleTypeResponse>.SuccessResponse(
+                    vehicleType,
+                    "Vehicle type retrieved successfully"
+                ));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ErrorResponse { Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting vehicle type");
+                return StatusCode(500, new ErrorResponse { Error = "An error occurred" });
+            }
+        }
+
+        /// <summary>
+        /// Create new vehicle type
+        /// </summary>
+        [HttpPost("vehicle-types")]
+        [ProducesResponseType(typeof(ApiResponse<VehicleTypeResponse>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> CreateVehicleType([FromBody] CreateVehicleTypeRequest request)
+        {
+            try
+            {
+                var vehicleType = await _adminService.CreateVehicleTypeAsync(request);
+                return StatusCode(201, ApiResponse<VehicleTypeResponse>.SuccessResponse(
+                    vehicleType,
+                    "Vehicle type created successfully"
+                ));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating vehicle type");
+                return StatusCode(500, new ErrorResponse { Error = "An error occurred" });
+            }
+        }
+
+        /// <summary>
+        /// Update vehicle type
+        /// </summary>
+        [HttpPut("vehicle-types/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<VehicleTypeResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpdateVehicleType(Guid id, [FromBody] UpdateVehicleTypeRequest request)
+        {
+            try
+            {
+                var vehicleType = await _adminService.UpdateVehicleTypeAsync(id, request);
+                return Ok(ApiResponse<VehicleTypeResponse>.SuccessResponse(
+                    vehicleType,
+                    "Vehicle type updated successfully"
+                ));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ErrorResponse { Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating vehicle type");
+                return StatusCode(500, new ErrorResponse { Error = "An error occurred" });
+            }
+        }
+
+        /// <summary>
+        /// Delete vehicle type
+        /// </summary>
+        [HttpDelete("vehicle-types/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DeleteVehicleType(Guid id)
+        {
+            try
+            {
+                await _adminService.DeleteVehicleTypeAsync(id);
+                return Ok(ApiResponse<object>.SuccessResponse(
+                    null,
+                    "Vehicle type deleted successfully"
+                ));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ErrorResponse { Error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new ErrorResponse { Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting vehicle type");
+                return StatusCode(500, new ErrorResponse { Error = "An error occurred" });
+            }
+        }
+
+        #endregion
     }
 }

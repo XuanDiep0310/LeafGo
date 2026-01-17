@@ -19,5 +19,12 @@ namespace LeafGo.Application.Interfaces
 
         // Statistics
         Task<SystemStatisticsResponse> GetSystemStatisticsAsync();
+
+        // Vehicle Type Management
+        Task<List<VehicleTypeResponse>> GetVehicleTypesAsync();
+        Task<VehicleTypeResponse> GetVehicleTypeByIdAsync(Guid vehicleTypeId);
+        Task<VehicleTypeResponse> CreateVehicleTypeAsync(CreateVehicleTypeRequest request);
+        Task<VehicleTypeResponse> UpdateVehicleTypeAsync(Guid vehicleTypeId, UpdateVehicleTypeRequest request);
+        Task DeleteVehicleTypeAsync(Guid vehicleTypeId);
     }
 }
