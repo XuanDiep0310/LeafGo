@@ -16,5 +16,8 @@ namespace LeafGo.Application.Interfaces
         // Ride Management
         Task<PagedResponse<RideManagementResponse>> GetRidesAsync(RideManagementRequest request);
         Task<RideManagementResponse> GetRideByIdAsync(Guid rideId);
+
+        // Statistics
+        Task<SystemStatisticsResponse> GetSystemStatisticsAsync();
     }
 }

@@ -236,5 +236,31 @@ namespace LeafGo.API.Controllers
         }
 
         #endregion
+
+        #region Statistics
+
+        /// <summary>
+        /// Get system statistics (dashboard data)
+        /// </summary>
+        [HttpGet("statistics")]
+        [ProducesResponseType(typeof(ApiResponse<SystemStatisticsResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetStatistics()
+        {
+            try
+            {
+                var stats = await _adminService.GetSystemStatisticsAsync();
+                return Ok(ApiResponse<SystemStatisticsResponse>.SuccessResponse(
+                    stats,
+                    "Statistics retrieved successfully"
+                ));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting statistics");
+                return StatusCode(500, new ErrorResponse { Error = "An error occurred" });
+            }
+        }
+
+        #endregion
     }
 }
