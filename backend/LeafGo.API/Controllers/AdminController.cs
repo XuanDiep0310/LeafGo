@@ -183,5 +183,58 @@ namespace LeafGo.API.Controllers
         }
 
         #endregion
+
+        #region Ride Management
+
+        /// <summary>
+        /// Get all rides with filtering and pagination
+        /// </summary>
+        [HttpGet("rides")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResponse<RideManagementResponse>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetRides([FromQuery] RideManagementRequest request)
+        {
+            try
+            {
+                var rides = await _adminService.GetRidesAsync(request);
+                return Ok(ApiResponse<PagedResponse<RideManagementResponse>>.SuccessResponse(
+                    rides,
+                    "Rides retrieved successfully"
+                ));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting rides");
+                return StatusCode(500, new ErrorResponse { Error = "An error occurred" });
+            }
+        }
+
+        /// <summary>
+        /// Get ride by ID
+        /// </summary>
+        [HttpGet("rides/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<RideManagementResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetRideById(Guid id)
+        {
+            try
+            {
+                var ride = await _adminService.GetRideByIdAsync(id);
+                return Ok(ApiResponse<RideManagementResponse>.SuccessResponse(
+                    ride,
+                    "Ride retrieved successfully"
+                ));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ErrorResponse { Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting ride by ID");
+                return StatusCode(500, new ErrorResponse { Error = "An error occurred" });
+            }
+        }
+
+        #endregion
     }
 }

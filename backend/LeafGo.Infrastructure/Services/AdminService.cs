@@ -299,5 +299,163 @@ namespace LeafGo.Infrastructure.Services
         }
 
         #endregion
+
+        #region Ride Management
+
+        public async Task<PagedResponse<RideManagementResponse>> GetRidesAsync(RideManagementRequest request)
+        {
+            var query = _context.Rides.AsQueryable();
+
+            // Filter by status
+            if (!string.IsNullOrEmpty(request.Status))
+            {
+                query = query.Where(r => r.Status == request.Status);
+            }
+
+            // Filter by date range
+            if (request.FromDate.HasValue)
+            {
+                query = query.Where(r => r.RequestedAt >= request.FromDate.Value);
+            }
+
+            if (request.ToDate.HasValue)
+            {
+                var toDateEnd = request.ToDate.Value.Date.AddDays(1).AddSeconds(-1);
+                query = query.Where(r => r.RequestedAt <= toDateEnd);
+            }
+
+            // Filter by user
+            if (request.UserId.HasValue)
+            {
+                query = query.Where(r => r.UserId == request.UserId.Value);
+            }
+
+            // Filter by driver
+            if (request.DriverId.HasValue)
+            {
+                query = query.Where(r => r.DriverId == request.DriverId.Value);
+            }
+
+            var totalItems = await query.CountAsync();
+
+            var rides = await query
+                .OrderByDescending(r => r.RequestedAt)
+                .Skip((request.Page - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .Select(r => new
+                {
+                    Ride = r,
+                    User = _context.Users.FirstOrDefault(u => u.Id == r.UserId),
+                    Driver = r.DriverId != null ? _context.Users.FirstOrDefault(u => u.Id == r.DriverId) : null,
+                    DriverVehicle = r.DriverId != null
+                        ? _context.DriverVehicles.FirstOrDefault(dv => dv.DriverId == r.DriverId && dv.IsActive)
+                        : null,
+                    Rating = _context.Ratings.FirstOrDefault(rt => rt.RideId == r.Id)
+                })
+                .ToListAsync();
+
+            var items = rides.Select(r => new RideManagementResponse
+            {
+                Id = r.Ride.Id,
+                User = new UserInfo
+                {
+                    Id = r.User!.Id,
+                    FullName = r.User.FullName,
+                    PhoneNumber = r.User.PhoneNumber,
+                    Email = r.User.Email
+                },
+                Driver = r.Driver != null ? new DriverInfo
+                {
+                    Id = r.Driver.Id,
+                    FullName = r.Driver.FullName,
+                    PhoneNumber = r.Driver.PhoneNumber,
+                    LicensePlate = r.DriverVehicle?.LicensePlate
+                } : null,
+                PickupAddress = r.Ride.PickupAddress,
+                DestinationAddress = r.Ride.DestinationAddress,
+                Distance = r.Ride.Distance,
+                EstimatedPrice = r.Ride.EstimatedPrice,
+                FinalPrice = r.Ride.FinalPrice,
+                Status = r.Ride.Status,
+                RequestedAt = r.Ride.RequestedAt,
+                AcceptedAt = r.Ride.AcceptedAt,
+                CompletedAt = r.Ride.CompletedAt,
+                CancelledAt = r.Ride.CancelledAt,
+                CancellationReason = r.Ride.CancellationReason,
+                CancelledBy = r.Ride.CancelledBy,
+                Rating = r.Rating != null ? new RatingInfo
+                {
+                    Rating = r.Rating.Rating,
+                    Comment = r.Rating.Comment
+                } : null
+            }).ToList();
+
+            return new PagedResponse<RideManagementResponse>
+            {
+                Items = items,
+                TotalItems = totalItems,
+                Page = request.Page,
+                PageSize = request.PageSize
+            };
+        }
+
+        public async Task<RideManagementResponse> GetRideByIdAsync(Guid rideId)
+        {
+            var ride = await _context.Rides
+                .Include(r => r.User)
+                .Include(r => r.Driver)
+                .Include(r => r.Rating)
+                .FirstOrDefaultAsync(r => r.Id == rideId);
+
+            if (ride == null)
+            {
+                throw new KeyNotFoundException("Ride not found");
+            }
+
+            DriverVehicle? vehicle = null;
+            if (ride.DriverId != null)
+            {
+                vehicle = await _context.DriverVehicles
+                    .FirstOrDefaultAsync(dv => dv.DriverId == ride.DriverId && dv.IsActive);
+            }
+
+            return new RideManagementResponse
+            {
+                Id = ride.Id,
+                User = new UserInfo
+                {
+                    Id = ride.User.Id,
+                    FullName = ride.User.FullName,
+                    PhoneNumber = ride.User.PhoneNumber,
+                    Email = ride.User.Email
+                },
+                Driver = ride.Driver != null ? new DriverInfo
+                {
+                    Id = ride.Driver.Id,
+                    FullName = ride.Driver.FullName,
+                    PhoneNumber = ride.Driver.PhoneNumber,
+                    LicensePlate = vehicle?.LicensePlate
+                } : null,
+                PickupAddress = ride.PickupAddress,
+                DestinationAddress = ride.DestinationAddress,
+                Distance = ride.Distance,
+                EstimatedPrice = ride.EstimatedPrice,
+                FinalPrice = ride.FinalPrice,
+                Status = ride.Status,
+                RequestedAt = ride.RequestedAt,
+                AcceptedAt = ride.AcceptedAt,
+                CompletedAt = ride.CompletedAt,
+                CancelledAt = ride.CancelledAt,
+                CancellationReason = ride.CancellationReason,
+                CancelledBy = ride.CancelledBy,
+                Rating = ride.Rating != null ? new RatingInfo
+                {
+                    Rating = ride.Rating.Rating,
+                    Comment = ride.Rating.Comment
+                } : null
+            };
+        }
+
+        #endregion
     }
 }
