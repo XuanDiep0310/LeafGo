@@ -457,5 +457,116 @@ namespace LeafGo.Infrastructure.Services
         }
 
         #endregion
+
+        #region Statistics
+
+        public async Task<SystemStatisticsResponse> GetSystemStatisticsAsync()
+        {
+            var today = DateTime.UtcNow.Date;
+            var tomorrow = today.AddDays(1);
+            var monthStart = new DateTime(today.Year, today.Month, 1);
+            var twelveMonthsAgo = today.AddMonths(-12);
+
+            // 1. Lấy thống kê cơ bản 
+            var totalUsers = await _context.Users.CountAsync(u => u.Role == UserRoles.User && !u.IsDeleted && u.IsActive);
+            var totalDrivers = await _context.Users.CountAsync(u => u.Role == UserRoles.Driver && !u.IsDeleted && u.IsActive);
+            var onlineDrivers = await _context.Users.CountAsync(u => u.Role == UserRoles.Driver && u.IsOnline && !u.IsDeleted);
+
+            var rideStats = await _context.Rides
+                .Select(r => new { r.Status, r.RequestedAt, r.CompletedAt, r.FinalPrice })
+                .ToListAsync(); // Nếu dữ liệu quá lớn, không nên ToList ở đây. Hãy dùng GroupBy dưới DB.
+
+            var response = new SystemStatisticsResponse
+            {
+                TotalUsers = totalUsers,
+                TotalDrivers = totalDrivers,
+                OnlineDrivers = onlineDrivers,
+
+                TotalCompletedRides = await _context.Rides.CountAsync(r => r.Status == RideStatus.Completed),
+                TotalPendingRides = await _context.Rides.CountAsync(r => r.Status == RideStatus.Pending),
+
+                // Sửa lỗi .Date bằng cách so sánh khoảng
+                TodayRides = await _context.Rides.CountAsync(r => r.RequestedAt >= today && r.RequestedAt < tomorrow),
+
+                TotalRevenue = await _context.Rides
+                    .Where(r => r.Status == RideStatus.Completed)
+                    .SumAsync(r => r.FinalPrice ?? 0),
+
+                TodayRevenue = await _context.Rides
+                    .Where(r => r.Status == RideStatus.Completed && r.CompletedAt >= today && r.CompletedAt < tomorrow)
+                    .SumAsync(r => r.FinalPrice ?? 0),
+
+                ThisMonthRevenue = await _context.Rides
+                    .Where(r => r.Status == RideStatus.Completed && r.CompletedAt >= monthStart)
+                    .SumAsync(r => r.FinalPrice ?? 0)
+            };
+
+            // 2. Refactor Top Drivers: Thực hiện OrderBy và Take TRƯỚC khi ToList
+            response.TopDrivers = await _context.Users
+                .Where(u => u.Role == UserRoles.Driver && !u.IsDeleted)
+                .Select(d => new
+                {
+                    d.Id,
+                    d.FullName,
+                    d.Avatar,
+                    // Tính toán trực tiếp để EF dịch sang SQL (Subqueries)
+                    TotalRides = _context.Rides.Count(r => r.DriverId == d.Id && r.Status == RideStatus.Completed),
+                    TotalEarnings = _context.Rides
+                        .Where(r => r.DriverId == d.Id && r.Status == RideStatus.Completed)
+                        .Sum(r => r.FinalPrice ?? 0),
+                    AverageRating = _context.Ratings
+                        .Where(rat => rat.DriverId == d.Id)
+                        .Average(rat => (double?)rat.Rating) ?? 0
+                })
+                .OrderByDescending(x => x.TotalEarnings)
+                .Take(10)
+                .Select(x => new TopDriverResponse
+                {
+                    Id = x.Id,
+                    FullName = x.FullName,
+                    Avatar = x.Avatar,
+                    TotalRides = x.TotalRides,
+                    TotalEarnings = x.TotalEarnings,
+                    AverageRating = x.AverageRating
+                })
+                .ToListAsync();
+
+            // 3. Revenue by month 
+            var revenueDataRaw = await _context.Rides
+                .Where(r => r.Status == RideStatus.Completed && r.CompletedAt >= twelveMonthsAgo)
+                .GroupBy(r => new { r.CompletedAt!.Value.Year, r.CompletedAt!.Value.Month })
+                .Select(g => new
+                {
+                    Year = g.Key.Year,
+                    Month = g.Key.Month,
+                    Revenue = g.Sum(r => r.FinalPrice ?? 0),
+                    TotalRides = g.Count()
+                })
+                .OrderBy(r => r.Year)
+                .ThenBy(r => r.Month)
+                .ToListAsync();
+
+            // Chuyển đổi sang List<RevenueByMonthResponse> sau khi đã tải dữ liệu về RAM
+            response.RevenueByMonth = revenueDataRaw.Select(r => new RevenueByMonthResponse
+            {
+                Month = $"{r.Year}-{r.Month:D2}", // Format "2023-01"
+                Revenue = r.Revenue,
+                TotalRides = r.TotalRides
+            }).ToList();
+
+            // 4. Rides by status
+            response.RidesByStatus = await _context.Rides
+                .GroupBy(r => r.Status)
+                .Select(g => new RidesByStatusResponse
+                {
+                    Status = g.Key,
+                    Count = g.Count()
+                })
+                .ToListAsync();
+
+            return response;
+        }
+
+        #endregion
     }
 }
