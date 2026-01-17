@@ -1,0 +1,16 @@
+﻿using LeafGo.Application.DTOs.Admin;
+using LeafGo.Application.DTOs.User;
+
+namespace LeafGo.Application.Interfaces
+{
+    public interface IAdminService
+    {
+        // User Management
+        Task<PagedResponse<UserManagementResponse>> GetUsersAsync(UserManagementRequest request);
+        Task<UserManagementResponse> GetUserByIdAsync(Guid userId);
+        Task<UserManagementResponse> CreateUserAsync(CreateUserRequest request);
+        Task<UserManagementResponse> UpdateUserAsync(Guid userId, UpdateUserRequest request);
+        Task ToggleUserStatusAsync(Guid userId, bool isActive);
+        Task DeleteUserAsync(Guid userId);
+    }
+}
