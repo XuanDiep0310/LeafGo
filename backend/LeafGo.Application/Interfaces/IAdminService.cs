@@ -12,5 +12,9 @@ namespace LeafGo.Application.Interfaces
         Task<UserManagementResponse> UpdateUserAsync(Guid userId, UpdateUserRequest request);
         Task ToggleUserStatusAsync(Guid userId, bool isActive);
         Task DeleteUserAsync(Guid userId);
+
+        // Ride Management
+        Task<PagedResponse<RideManagementResponse>> GetRidesAsync(RideManagementRequest request);
+        Task<RideManagementResponse> GetRideByIdAsync(Guid rideId);
     }
 }
