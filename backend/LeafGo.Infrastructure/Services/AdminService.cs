@@ -568,5 +568,143 @@ namespace LeafGo.Infrastructure.Services
         }
 
         #endregion
+
+        #region Vehicle Type Management
+
+        public async Task<List<VehicleTypeResponse>> GetVehicleTypesAsync()
+        {
+            var vehicleTypes = await _context.VehicleTypes
+                .OrderBy(vt => vt.Name)
+                .ToListAsync();
+
+            var result = new List<VehicleTypeResponse>();
+
+            foreach (var vt in vehicleTypes)
+            {
+                var totalDrivers = await _context.DriverVehicles
+                    .CountAsync(dv => dv.VehicleTypeId == vt.Id && dv.IsActive);
+
+                var totalRides = await _context.Rides
+                    .CountAsync(r => r.VehicleTypeId == vt.Id);
+
+                result.Add(new VehicleTypeResponse
+                {
+                    Id = vt.Id,
+                    Name = vt.Name,
+                    BasePrice = vt.BasePrice,
+                    PricePerKm = vt.PricePerKm,
+                    Description = vt.Description,
+                    IsActive = vt.IsActive,
+                    TotalDrivers = totalDrivers,
+                    TotalRides = totalRides
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<VehicleTypeResponse> GetVehicleTypeByIdAsync(Guid vehicleTypeId)
+        {
+            var vt = await _context.VehicleTypes
+                .FirstOrDefaultAsync(v => v.Id == vehicleTypeId);
+
+            if (vt == null)
+            {
+                throw new KeyNotFoundException("Vehicle type not found");
+            }
+
+            return new VehicleTypeResponse
+            {
+                Id = vt.Id,
+                Name = vt.Name,
+                BasePrice = vt.BasePrice,
+                PricePerKm = vt.PricePerKm,
+                Description = vt.Description,
+                IsActive = vt.IsActive,
+                TotalDrivers = await _context.DriverVehicles.CountAsync(dv => dv.VehicleTypeId == vt.Id && dv.IsActive),
+                TotalRides = await _context.Rides.CountAsync(r => r.VehicleTypeId == vt.Id)
+            };
+        }
+
+        public async Task<VehicleTypeResponse> CreateVehicleTypeAsync(CreateVehicleTypeRequest request)
+        {
+            var vehicleType = new VehicleType
+            {
+                Id = Guid.NewGuid(),
+                Name = request.Name,
+                BasePrice = request.BasePrice,
+                PricePerKm = request.PricePerKm,
+                Description = request.Description,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.VehicleTypes.Add(vehicleType);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Vehicle type created: {Name}", request.Name);
+
+            return new VehicleTypeResponse
+            {
+                Id = vehicleType.Id,
+                Name = vehicleType.Name,
+                BasePrice = vehicleType.BasePrice,
+                PricePerKm = vehicleType.PricePerKm,
+                Description = vehicleType.Description,
+                IsActive = vehicleType.IsActive,
+                TotalDrivers = 0,
+                TotalRides = 0
+            };
+        }
+
+        public async Task<VehicleTypeResponse> UpdateVehicleTypeAsync(Guid vehicleTypeId, UpdateVehicleTypeRequest request)
+        {
+            var vehicleType = await _context.VehicleTypes
+                .FirstOrDefaultAsync(vt => vt.Id == vehicleTypeId);
+
+            if (vehicleType == null)
+            {
+                throw new KeyNotFoundException("Vehicle type not found");
+            }
+
+            vehicleType.Name = request.Name;
+            vehicleType.BasePrice = request.BasePrice;
+            vehicleType.PricePerKm = request.PricePerKm;
+            vehicleType.Description = request.Description;
+            vehicleType.IsActive = request.IsActive;
+            vehicleType.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return await GetVehicleTypeByIdAsync(vehicleTypeId);
+        }
+
+        public async Task DeleteVehicleTypeAsync(Guid vehicleTypeId)
+        {
+            var vehicleType = await _context.VehicleTypes
+                .FirstOrDefaultAsync(vt => vt.Id == vehicleTypeId);
+
+            if (vehicleType == null)
+            {
+                throw new KeyNotFoundException("Vehicle type not found");
+            }
+
+            // Check if any drivers are using this vehicle type
+            var hasDrivers = await _context.DriverVehicles
+                .AnyAsync(dv => dv.VehicleTypeId == vehicleTypeId && dv.IsActive);
+
+            if (hasDrivers)
+            {
+                throw new InvalidOperationException("Cannot delete vehicle type. It is currently being used by drivers");
+            }
+
+            _context.VehicleTypes.Remove(vehicleType);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Vehicle type deleted: {VehicleTypeId}", vehicleTypeId);
+        }
+
+        #endregion
     }
 }
