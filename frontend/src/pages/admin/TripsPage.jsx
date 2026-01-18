@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Input, Select, DatePicker, Card, Button, Empty, Spin } from "antd";
+import { Input, Select, DatePicker, Card, Button, Empty, Spin, Pagination } from "antd";
 import { Search, Star, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { mockApi } from "../../services/mockData";
+import { getRides } from "../../services/adminService";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -13,47 +13,44 @@ const { RangePicker } = DatePicker;
 // Implements FR-18
 export default function AdminTripsPage() {
   const [trips, setTrips] = useState([]);
-  const [filteredTrips, setFilteredTrips] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchText, setSearchText] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState("");
   const [dateRange, setDateRange] = useState(null);
-  const [driverFilter, setDriverFilter] = useState("");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
     fetchTrips();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [trips, searchText, statusFilter, dateRange, driverFilter]);
+  }, [currentPage, pageSize, statusFilter, dateRange]);
 
   const fetchTrips = async () => {
     try {
-      const allTrips = await mockApi.getAllTrips();
+      setLoading(true);
 
-      // Enrich trips with customer and driver info
-      const enrichedTrips = await Promise.all(
-        allTrips.map(async (trip) => {
-          const customer = trip.userId
-            ? await mockApi.getUserById(trip.userId)
-            : null;
-          const driver = trip.driverId
-            ? await mockApi.getUserById(trip.driverId)
-            : null;
-          return {
-            ...trip,
-            customerName: customer?.fullName || "Unknown",
-            customerPhone: customer?.phone || "-",
-            driverName: driver?.fullName || "-",
-            driverPhone: driver?.phone || "-",
-            driverVehicle: driver?.vehicle || "-",
-            driverRating: driver?.rating || 0,
-          };
-        })
-      );
+      const params = {
+        Page: currentPage,
+        PageSize: pageSize,
+        Status: statusFilter || undefined,
+      };
 
-      setTrips(enrichedTrips);
+      if (dateRange && dateRange[0] && dateRange[1]) {
+        params.FromDate = dateRange[0].toISOString();
+        params.ToDate = dateRange[1].toISOString();
+      }
+
+      const response = await getRides(params);
+
+      if (response.success) {
+        setTrips(response.data.items);
+        setTotalItems(response.data.totalItems);
+      } else {
+        console.error('Error fetching trips:', response.message);
+      }
     } catch (error) {
       console.error("Error fetching trips:", error);
     } finally {
@@ -61,63 +58,35 @@ export default function AdminTripsPage() {
     }
   };
 
-  const applyFilters = () => {
-    let filtered = [...trips];
+  const handleSearch = () => {
+    setCurrentPage(1);
+    fetchTrips();
+  };
 
-    // Search by location
-    if (searchText) {
-      filtered = filtered.filter(
-        (trip) =>
-          trip.pickupLocation?.address
-            ?.toLowerCase()
-            .includes(searchText.toLowerCase()) ||
-          trip.dropoffLocation?.address
-            ?.toLowerCase()
-            .includes(searchText.toLowerCase())
-      );
-    }
-
-    // Filter by driver name
-    if (driverFilter) {
-      filtered = filtered.filter((trip) =>
-        trip.driverName?.toLowerCase().includes(driverFilter.toLowerCase())
-      );
-    }
-
-    // Filter by status
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((trip) => trip.status === statusFilter);
-    }
-
-    // Filter by date range
-    if (dateRange && dateRange[0] && dateRange[1]) {
-      filtered = filtered.filter((trip) => {
-        const tripDate = new Date(trip.createdAt);
-        return (
-          tripDate >= dateRange[0].toDate() && tripDate <= dateRange[1].toDate()
-        );
-      });
-    }
-
-    setFilteredTrips(filtered);
+  const handleReset = () => {
+    setStatusFilter("");
+    setDateRange(null);
+    setCurrentPage(1);
   };
 
   const getStatusColor = (status) => {
     const colors = {
-      completed: "bg-green-100 border-green-300 text-green-700",
-      cancelled: "bg-red-100 border-red-300 text-red-700",
-      in_progress: "bg-blue-100 border-blue-300 text-blue-700",
-      finding: "bg-orange-100 border-orange-300 text-orange-700",
+      Completed: "bg-green-100 border-green-300 text-green-700",
+      Cancelled: "bg-red-100 border-red-300 text-red-700",
+      InProgress: "bg-blue-100 border-blue-300 text-blue-700",
+      Pending: "bg-orange-100 border-orange-300 text-orange-700",
+      Requested: "bg-yellow-100 border-yellow-300 text-yellow-700",
     };
     return colors[status] || "bg-gray-100 border-gray-300 text-gray-700";
   };
 
   const getStatusText = (status) => {
     const texts = {
-      completed: "✅ Hoàn thành",
-      cancelled: "❌ Đã hủy",
-      in_progress: "🚗 Đang đi",
-      finding: "🔍 Đang tìm",
+      Completed: "✅ Hoàn thành",
+      Cancelled: "❌ Đã hủy",
+      InProgress: "🚗 Đang đi",
+      Pending: "⏳ Chờ xử lý",
+      Requested: "🔍 Đang tìm",
     };
     return texts[status] || status;
   };
@@ -130,7 +99,7 @@ export default function AdminTripsPage() {
           <Clock className="w-5 h-5 text-gray-400 shrink-0" />
           <div>
             <div className="text-sm text-gray-500">
-              {format(new Date(trip.createdAt), "dd/MM/yyyy HH:mm", {
+              {format(new Date(trip.requestedAt), "dd/MM/yyyy HH:mm", {
                 locale: vi,
               })}
             </div>
@@ -149,11 +118,11 @@ export default function AdminTripsPage() {
       <div className="mb-3 bg-gray-50 p-3 rounded">
         <div className="text-sm mb-2">
           <span className="font-semibold">Từ:</span>{" "}
-          {trip.pickupLocation?.address || "N/A"}
+          {trip.pickupAddress || "N/A"}
         </div>
         <div className="text-sm">
           <span className="font-semibold">Đến:</span>{" "}
-          {trip.dropoffLocation?.address || "N/A"}
+          {trip.destinationAddress || "N/A"}
         </div>
       </div>
 
@@ -161,12 +130,12 @@ export default function AdminTripsPage() {
       <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
         <div>
           <div className="text-gray-500 text-xs">Khoảng cách</div>
-          <div className="font-semibold">{trip.distance} km</div>
+          <div className="font-semibold">{trip.distance?.toFixed(2)} km</div>
         </div>
         <div>
           <div className="text-gray-500 text-xs">Giá</div>
           <div className="font-bold text-blue-600">
-            {trip.price?.toLocaleString()}đ
+            {trip.finalPrice ? trip.finalPrice.toLocaleString() : trip.estimatedPrice?.toLocaleString()}đ
           </div>
         </div>
       </div>
@@ -175,44 +144,55 @@ export default function AdminTripsPage() {
       <div className="grid grid-cols-2 gap-4 mb-3 text-sm">
         <div className="border-r pr-3">
           <div className="text-gray-500 text-xs mb-1">Khách hàng</div>
-          <div className="font-medium">{trip.customerName}</div>
-          <div className="text-xs text-gray-600">{trip.customerPhone}</div>
+          <div className="font-medium">{trip.user?.fullName || "N/A"}</div>
+          <div className="text-xs text-gray-600">{trip.user?.phoneNumber || "-"}</div>
         </div>
         <div className="pl-3">
           <div className="text-gray-500 text-xs mb-1">Tài xế</div>
-          <div className="font-medium">{trip.driverName}</div>
-          <div className="text-xs text-gray-600">{trip.driverPhone}</div>
+          <div className="font-medium">{trip.driver?.fullName || "Chưa có"}</div>
+          <div className="text-xs text-gray-600">{trip.driver?.phoneNumber || "-"}</div>
+          {trip.driver?.licensePlate && (
+            <div className="text-xs text-blue-600 font-semibold">{trip.driver.licensePlate}</div>
+          )}
         </div>
       </div>
 
       {/* Rating and Comment */}
-      <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-200 text-sm">
-        <div>
-          <div className="text-gray-500 text-xs mb-1">Đánh giá</div>
-          {trip.rating ? (
+      {trip.rating && (
+        <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-200 text-sm">
+          <div>
+            <div className="text-gray-500 text-xs mb-1">Đánh giá</div>
             <div className="flex items-center gap-1">
               {[...Array(5)].map((_, i) => (
                 <Star
                   key={i}
-                  className={`w-4 h-4 ${
-                    i < trip.rating
-                      ? "text-yellow-400 fill-yellow-400"
-                      : "text-gray-300"
-                  }`}
+                  className={`w-4 h-4 ${i < trip.rating.rating
+                    ? "text-yellow-400 fill-yellow-400"
+                    : "text-gray-300"
+                    }`}
                 />
               ))}
             </div>
-          ) : (
-            <div className="font-semibold text-gray-500">Chưa đánh giá</div>
-          )}
-        </div>
-        <div>
-          <div className="text-gray-500 text-xs mb-1">Nhận xét</div>
-          <div className="text-sm italic text-gray-600">
-            {trip.comment || "-"}
+          </div>
+          <div>
+            <div className="text-gray-500 text-xs mb-1">Nhận xét</div>
+            <div className="text-sm italic text-gray-600">
+              {trip.rating.comment || "-"}
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Cancellation Info */}
+      {trip.status === "Cancelled" && trip.cancellationReason && (
+        <div className="pt-3 border-t border-gray-200 text-sm">
+          <div className="text-gray-500 text-xs mb-1">Lý do hủy</div>
+          <div className="text-sm text-red-600">{trip.cancellationReason}</div>
+          {trip.cancelledBy && (
+            <div className="text-xs text-gray-500 mt-1">Bởi: {trip.cancelledBy}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -225,7 +205,7 @@ export default function AdminTripsPage() {
         <p className="text-muted-foreground text-sm">
           Tổng:{" "}
           <span className="font-semibold text-foreground">
-            {filteredTrips.length}
+            {totalItems}
           </span>{" "}
           chuyến
         </p>
@@ -234,29 +214,7 @@ export default function AdminTripsPage() {
       {/* Filters */}
       <Card className="mb-6 border-l-4 border-l-blue-500">
         <div className="space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="md:col-span-1">
-              <label className="block text-xs font-semibold text-gray-600 mb-2">
-                Tìm kiếm
-              </label>
-              <Input
-                placeholder="Địa điểm..."
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                size="middle"
-              />
-            </div>
-            <div className="md:col-span-1">
-              <label className="block text-xs font-semibold text-gray-600 mb-2">
-                Tài xế
-              </label>
-              <Input
-                placeholder="Tên tài xế..."
-                value={driverFilter}
-                onChange={(e) => setDriverFilter(e.target.value)}
-                size="middle"
-              />
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="md:col-span-1">
               <label className="block text-xs font-semibold text-gray-600 mb-2">
                 Trạng thái
@@ -265,19 +223,22 @@ export default function AdminTripsPage() {
                 value={statusFilter}
                 onChange={setStatusFilter}
                 className="w-full"
+                placeholder="Tất cả"
               >
-                <Option value="all">Tất cả</Option>
-                <Option value="completed">Hoàn thành</Option>
-                <Option value="in_progress">Đang đi</Option>
-                <Option value="cancelled">Đã hủy</Option>
-                <Option value="finding">Đang tìm</Option>
+                <Option value="">Tất cả</Option>
+                <Option value="Completed">Hoàn thành</Option>
+                <Option value="InProgress">Đang đi</Option>
+                <Option value="Cancelled">Đã hủy</Option>
+                <Option value="Pending">Chờ xử lý</Option>
+                <Option value="Requested">Đang tìm</Option>
               </Select>
             </div>
-            <div className="md:col-span-1">
+            <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-gray-600 mb-2">
-                Ngày
+                Khoảng thời gian
               </label>
               <RangePicker
+                value={dateRange}
                 onChange={setDateRange}
                 format="DD/MM/YYYY"
                 size="middle"
@@ -285,16 +246,11 @@ export default function AdminTripsPage() {
                 style={{ width: "100%" }}
               />
             </div>
-            <div className="flex items-end">
-              <Button
-                onClick={() => {
-                  setSearchText("");
-                  setDriverFilter("");
-                  setStatusFilter("all");
-                  setDateRange(null);
-                }}
-                className="w-full"
-              >
+            <div className="flex items-end gap-2">
+              <Button type="primary" onClick={handleSearch} className="flex-1">
+                Tìm kiếm
+              </Button>
+              <Button onClick={handleReset} className="flex-1">
                 Reset
               </Button>
             </div>
@@ -304,12 +260,28 @@ export default function AdminTripsPage() {
 
       {/* Trips List */}
       <Spin spinning={loading} tip="Đang tải...">
-        {filteredTrips.length > 0 ? (
-          <div>
-            {filteredTrips.map((trip) => (
-              <TripCard key={trip.id} trip={trip} />
-            ))}
-          </div>
+        {trips.length > 0 ? (
+          <>
+            <div>
+              {trips.map((trip) => (
+                <TripCard key={trip.id} trip={trip} />
+              ))}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={totalItems}
+                onChange={(page, size) => {
+                  setCurrentPage(page);
+                  setPageSize(size);
+                }}
+                showSizeChanger
+                showTotal={(total) => `Tổng ${total} chuyến`}
+              />
+            </div>
+          </>
         ) : (
           <Empty description="Không có chuyến đi nào" />
         )}

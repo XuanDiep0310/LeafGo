@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useSelector } from "react-redux";
-import { Card, Switch, message, Modal, Tag, List, Button } from "antd";
+import { useState, useEffect, useRef } from "react";
+import { Card, Switch, message, Modal, Tag, List, Button, Spin } from "antd";
 import {
   Power,
   Bell,
@@ -12,122 +11,347 @@ import {
   Phone,
   User,
   Clock,
+  AlertCircle,
+  Car,
 } from "lucide-react";
-import { mockApi } from "../../services/mockData";
+import {
+  toggleDriverOnline,
+  updateDriverLocation,
+  getPendingRides,
+  acceptRide,
+  getCurrentRide,
+  updateRideStatus,
+  getDriverVehicle,
+} from "../../services/driverService";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import VehicleConfigModal from "../../components/VehicleConfigModal";
+
+// Status mapping for API
+const RIDE_STATUS = {
+  PENDING: "Pending",
+  ACCEPTED: "Accepted",
+  ARRIVING: "Arriving",
+  ARRIVED: "Arrived",
+  IN_PROGRESS: "InProgress",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+
+const STATUS_LABELS = {
+  [RIDE_STATUS.PENDING]: "Chờ nhận",
+  [RIDE_STATUS.ACCEPTED]: "Đã nhận",
+  [RIDE_STATUS.ARRIVING]: "Đang đến",
+  [RIDE_STATUS.ARRIVED]: "Đã đến điểm đón",
+  [RIDE_STATUS.IN_PROGRESS]: "Đang di chuyển",
+  [RIDE_STATUS.COMPLETED]: "Hoàn thành",
+  [RIDE_STATUS.CANCELLED]: "Đã hủy",
+};
 
 // Implements FR-12, FR-13, FR-14
 export default function WorkplacePage() {
-  const { user } = useSelector((state) => state.auth);
   const [isOnline, setIsOnline] = useState(false);
-  const [currentTrip, setCurrentTrip] = useState(null);
-  const [pendingTrips, setPendingTrips] = useState([]);
-  const [showIncomingModal, setShowIncomingModal] = useState(false);
-  const [selectedTrip, setSelectedTrip] = useState(null);
+  const [currentRide, setCurrentRide] = useState(null);
+  const [pendingRides, setPendingRides] = useState([]);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [showRideModal, setShowRideModal] = useState(false);
+  const [selectedRide, setSelectedRide] = useState(null);
+  const [showVehicleModal, setShowVehicleModal] = useState(false);
+  const [hasVehicle, setHasVehicle] = useState(false);
+  const [loading, setLoading] = useState({
+    toggle: false,
+    accept: false,
+    status: false,
+  });
 
-  const handleToggleOnline = async (checked) => {
-    try {
-      await mockApi.updateDriverStatus(user.id, checked ? "online" : "offline");
-      setIsOnline(checked);
-      message.success(
-        checked ? "Bạn đã online, sẵn sàng nhận chuyến!" : "Bạn đã offline"
+  // Refs for intervals
+  const locationIntervalRef = useRef(null);
+  const ridesIntervalRef = useRef(null);
+
+  // Get current location on mount
+  useEffect(() => {
+    getCurrentLocation();
+    checkVehicleConfig();
+    return () => {
+      // Cleanup intervals on unmount
+      if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
+      if (ridesIntervalRef.current) clearInterval(ridesIntervalRef.current);
+    };
+  }, []);
+
+  // Setup polling when online
+  useEffect(() => {
+    if (isOnline) {
+      // Fetch current ride immediately
+      fetchCurrentRide();
+
+      // Poll for pending rides every 10 seconds if no current ride
+      ridesIntervalRef.current = setInterval(() => {
+        if (!currentRide) {
+          fetchPendingRides();
+        }
+      }, 10000);
+
+      // Update location every 30 seconds
+      locationIntervalRef.current = setInterval(() => {
+        updateLocation();
+      }, 30000);
+
+      // Initial fetch
+      if (!currentRide) {
+        fetchPendingRides();
+      }
+    } else {
+      // Clear intervals when offline
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
+      }
+      if (ridesIntervalRef.current) {
+        clearInterval(ridesIntervalRef.current);
+        ridesIntervalRef.current = null;
+      }
+      setPendingRides([]);
+    }
+
+    return () => {
+      if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
+      if (ridesIntervalRef.current) clearInterval(ridesIntervalRef.current);
+    };
+  }, [isOnline, currentRide]);
+
+  // Get current GPS location
+  const getCurrentLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error("Location error:", error);
+          message.warning("Không thể lấy vị trí. Vui lòng bật GPS.");
+        },
+        { enableHighAccuracy: true }
       );
+    }
+  };
 
-      if (checked) {
-        setTimeout(() => {
-          simulateIncomingTrip();
-        }, 5000);
+  // Check if vehicle is configured
+  const checkVehicleConfig = async () => {
+    try {
+      const response = await getDriverVehicle();
+      if (response.success && response.data) {
+        setHasVehicle(true);
+      } else {
+        setHasVehicle(false);
       }
     } catch (error) {
-      message.error("Có lỗi xảy ra");
+      setHasVehicle(false);
     }
   };
 
-  const simulateIncomingTrip = () => {
-    const mockTrips = [
-      {
-        id: `trip_${Date.now()}_1`,
-        createdAt: new Date().toISOString(), // Add timestamp
-        pickupLocation: {
-          address: "Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
-          lat: 21.0069,
-          lng: 105.8433,
-        },
-        dropoffLocation: {
-          address: "Số 54 Triều Khúc, Thanh Xuân, Hà Nội",
-          lat: 20.9948,
-          lng: 105.8096,
-        },
-        distance: 8.5,
-        price: 42500,
-        customerName: "Nguyễn Văn A",
-        customerPhone: "0123456789",
-      },
-      {
-        id: `trip_${Date.now()}_2`,
-        createdAt: new Date().toISOString(), // Add timestamp
-        pickupLocation: {
-          address: "Hồ Hoàn Kiếm, Hà Nội",
-          lat: 21.0285,
-          lng: 105.8542,
-        },
-        dropoffLocation: {
-          address: "Sân bay Nội Bài, Hà Nội",
-          lat: 21.2187,
-          lng: 105.8067,
-        },
-        distance: 25.3,
-        price: 135000,
-        customerName: "Trần Thị B",
-        customerPhone: "0987654321",
-      },
-    ];
-    setPendingTrips(mockTrips);
-    message.info(`Có ${mockTrips.length} yêu cầu đặt xe mới`);
-  };
-
-  const handleAcceptTrip = (trip) => {
-    setCurrentTrip({ ...trip, status: "accepted" });
-    setPendingTrips(pendingTrips.filter((t) => t.id !== trip.id));
-    setShowIncomingModal(false);
-    setSelectedTrip(null);
-    message.success("Đã nhận chuyến!");
-  };
-
-  const handleViewTrip = (trip) => {
-    setSelectedTrip(trip);
-    setShowIncomingModal(true);
-  };
-
-  const handleRejectTrip = () => {
-    if (selectedTrip) {
-      setPendingTrips(pendingTrips.filter((t) => t.id !== selectedTrip.id));
-      message.info("Đã từ chối chuyến");
+  // Update location on server
+  const updateLocation = async () => {
+    if (!currentLocation) {
+      getCurrentLocation();
+      return;
     }
-    setShowIncomingModal(false);
-    setSelectedTrip(null);
+
+    try {
+      await updateDriverLocation(
+        currentLocation.latitude,
+        currentLocation.longitude
+      );
+    } catch (error) {
+      console.error("Error updating location:", error);
+    }
   };
 
-  const handleUpdateStatus = (status) => {
-    setCurrentTrip({ ...currentTrip, status });
-    const statusMessages = {
-      arriving: "Đang đến điểm đón",
-      arrived: "Đã đến điểm đón",
-      in_progress: "Đang di chuyển",
-      completed: "Hoàn thành chuyến đi",
-    };
-    message.success(statusMessages[status]);
+  // FR-12: Toggle online/offline status
+  const handleToggleOnline = async (checked) => {
+    // Check if vehicle is configured before going online
+    if (checked && !hasVehicle) {
+      message.warning("Vui lòng cập nhật thông tin xe trước khi nhận chuyến");
+      setShowVehicleModal(true);
+      return;
+    }
 
-    if (status === "completed") {
-      setTimeout(() => {
-        setCurrentTrip(null);
-        if (isOnline) {
-          setTimeout(() => {
-            simulateIncomingTrip();
-          }, 5000);
+    setLoading((prev) => ({ ...prev, toggle: true }));
+
+    try {
+      const response = await toggleDriverOnline(checked);
+
+      if (response.success) {
+        setIsOnline(response.data.isOnline);
+        message.success(
+          response.data.message ||
+          (checked
+            ? "Bạn đã online, sẵn sàng nhận chuyến!"
+            : "Bạn đã offline")
+        );
+
+        // Update location immediately when going online
+        if (checked && currentLocation) {
+          await updateDriverLocation(
+            currentLocation.latitude,
+            currentLocation.longitude
+          );
         }
-      }, 2000);
+      }
+    } catch (error) {
+      console.error("Toggle online error:", error);
+      message.error(
+        error.response?.data?.error || "Không thể thay đổi trạng thái"
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, toggle: false }));
+    }
+  };
+
+  // Fetch current active ride
+  const fetchCurrentRide = async () => {
+    try {
+      const response = await getCurrentRide();
+      if (response.success && response.data) {
+        setCurrentRide(response.data);
+      } else {
+        setCurrentRide(null);
+      }
+    } catch (error) {
+      // No current ride or error - that's okay
+      setCurrentRide(null);
+    }
+  };
+
+  // FR-13: Fetch pending rides near driver
+  const fetchPendingRides = async () => {
+    if (!currentLocation) return;
+
+    try {
+      const response = await getPendingRides(
+        currentLocation.latitude,
+        currentLocation.longitude,
+        5 // 5km radius
+      );
+
+      if (response.success && response.data) {
+        const rides = response.data;
+        setPendingRides(rides);
+
+        // Show notification if there are new rides
+        if (rides.length > 0 && pendingRides.length === 0) {
+          message.info({
+            content: `Có ${rides.length} yêu cầu đặt xe mới`,
+            icon: <Bell className="w-4 h-4" />,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching pending rides:", error);
+    }
+  };
+
+  // View ride details
+  const handleViewRide = (ride) => {
+    setSelectedRide(ride);
+    setShowRideModal(true);
+  };
+
+  // FR-13: Accept a ride
+  const handleAcceptRide = async () => {
+    if (!selectedRide) return;
+
+    setLoading((prev) => ({ ...prev, accept: true }));
+
+    try {
+      const response = await acceptRide(selectedRide.id, selectedRide.version);
+
+      if (response.success) {
+        setCurrentRide(response.data);
+        setPendingRides([]);
+        setShowRideModal(false);
+        setSelectedRide(null);
+        message.success("Đã nhận chuyến thành công!");
+      }
+    } catch (error) {
+      console.error("Accept ride error:", error);
+      const errorMsg = error.response?.data?.error;
+
+      if (error.response?.status === 409) {
+        message.error("Chuyến xe đã được tài xế khác nhận!");
+        // Refresh pending rides
+        fetchPendingRides();
+      } else if (error.response?.status === 404) {
+        message.error("Chuyến xe không còn tồn tại!");
+        fetchPendingRides();
+      } else {
+        message.error(errorMsg || "Không thể nhận chuyến");
+      }
+    } finally {
+      setLoading((prev) => ({ ...prev, accept: false }));
+    }
+  };
+
+  // Reject ride
+  const handleRejectRide = () => {
+    setShowRideModal(false);
+    setSelectedRide(null);
+    message.info("Đã từ chối chuyến");
+  };
+
+  // FR-14: Update ride status
+  const handleUpdateStatus = async (newStatus) => {
+    if (!currentRide) return;
+
+    setLoading((prev) => ({ ...prev, status: true }));
+
+    try {
+      let finalPrice = undefined;
+
+      // If completing, use the estimated price as final price
+      if (newStatus === RIDE_STATUS.COMPLETED) {
+        finalPrice = currentRide.estimatedPrice;
+      }
+
+      const response = await updateRideStatus(
+        currentRide.id,
+        newStatus,
+        finalPrice
+      );
+
+      if (response.success) {
+        const statusMessages = {
+          [RIDE_STATUS.ARRIVING]: "Đang đến điểm đón",
+          [RIDE_STATUS.ARRIVED]: "Đã đến điểm đón",
+          [RIDE_STATUS.IN_PROGRESS]: "Đã bắt đầu chuyến đi",
+          [RIDE_STATUS.COMPLETED]: "Hoàn thành chuyến đi",
+        };
+
+        message.success(statusMessages[newStatus] || "Đã cập nhật trạng thái");
+
+        // If completed, clear current ride and check for new rides
+        if (newStatus === RIDE_STATUS.COMPLETED) {
+          setTimeout(() => {
+            setCurrentRide(null);
+            if (isOnline) {
+              fetchPendingRides();
+            }
+          }, 1500);
+        } else {
+          // Update current ride status locally
+          setCurrentRide((prev) => ({ ...prev, status: newStatus }));
+        }
+      }
+    } catch (error) {
+      console.error("Update status error:", error);
+      message.error(
+        error.response?.data?.error || "Không thể cập nhật trạng thái"
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, status: false }));
     }
   };
 
@@ -156,55 +380,104 @@ export default function WorkplacePage() {
           <Switch
             checked={isOnline}
             onChange={handleToggleOnline}
+            loading={loading.toggle}
             size="large"
           />
         </div>
+
+        {/* Vehicle warning */}
+        {!hasVehicle && (
+          <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <Car className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm text-orange-800 mb-2">
+                  Vui lòng cấu hình thông tin xe để bắt đầu nhận chuyến
+                </p>
+                <Button
+                  size="small"
+                  onClick={() => setShowVehicleModal(true)}
+                  icon={<Car className="w-4 h-4" />}
+                >
+                  Cập nhật thông tin xe
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Location warning */}
+        {isOnline && !currentLocation && (
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-yellow-800">
+              Không thể lấy vị trí. Vui lòng bật GPS để nhận chuyến.
+            </p>
+          </div>
+        )}
       </Card>
 
-      {!currentTrip && isOnline && pendingTrips.length > 0 && (
+      {/* Pending Rides List */}
+      {!currentRide && isOnline && pendingRides.length > 0 && (
         <Card className="mb-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">
-            Yêu cầu đặt xe ({pendingTrips.length})
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-foreground">
+              Yêu cầu đặt xe ({pendingRides.length})
+            </h3>
+            <Button
+              size="small"
+              onClick={fetchPendingRides}
+              icon={<Bell className="w-4 h-4" />}
+            >
+              Làm mới
+            </Button>
+          </div>
           <List
-            dataSource={pendingTrips}
-            renderItem={(trip) => (
+            dataSource={pendingRides}
+            renderItem={(ride) => (
               <List.Item
                 className="hover:bg-accent/50 cursor-pointer rounded-lg p-4 transition-colors"
-                onClick={() => handleViewTrip(trip)}
+                onClick={() => handleViewRide(ride)}
               >
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-muted-foreground" />
                       <span className="font-medium text-foreground">
-                        {trip.customerName}
+                        {ride.user?.fullName || "Khách hàng"}
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {format(new Date(trip.createdAt), "HH:mm", {
-                        locale: vi,
-                      })}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {ride.distanceFromDriver && (
+                        <span className="text-xs text-muted-foreground">
+                          {ride.distanceFromDriver.toFixed(1)} km từ bạn
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(ride.requestedAt), "HH:mm", {
+                          locale: vi,
+                        })}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-start gap-2 mb-1">
                     <MapPin className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
                     <span className="text-sm text-muted-foreground">
-                      {trip.pickupLocation.address}
+                      {ride.pickupAddress}
                     </span>
                   </div>
                   <div className="flex items-start gap-2">
                     <Navigation className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
                     <span className="text-sm text-muted-foreground">
-                      {trip.dropoffLocation.address}
+                      {ride.destinationAddress}
                     </span>
                   </div>
                   <div className="flex items-center gap-4 mt-2">
                     <span className="text-sm text-muted-foreground">
-                      {trip.distance} km
+                      {ride.distance?.toFixed(1)} km
                     </span>
                     <span className="text-lg font-bold text-primary">
-                      {trip.price.toLocaleString()}đ
+                      {ride.estimatedPrice?.toLocaleString()}đ
                     </span>
                   </div>
                 </div>
@@ -214,36 +487,41 @@ export default function WorkplacePage() {
         </Card>
       )}
 
-      {/* Current Trip Info */}
-      {currentTrip ? (
+      {/* Current Ride Info */}
+      {currentRide ? (
         <Card className="mb-6">
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-semibold text-foreground">
                 Chuyến đi hiện tại
               </h3>
-              <Tag color="blue">{getStatusText(currentTrip.status)}</Tag>
+              <Tag color="blue">{STATUS_LABELS[currentRide.status]}</Tag>
             </div>
           </div>
 
           <div className="space-y-3 mb-6">
-            <div className="flex items-center gap-2 text-sm">
-              <User className="w-4 h-4 text-muted-foreground" />
-              <span className="text-foreground">
-                {currentTrip.customerName}
-              </span>
-              <span className="text-muted-foreground">•</span>
-              <Phone className="w-4 h-4 text-muted-foreground" />
-              <span className="text-foreground">
-                {currentTrip.customerPhone}
-              </span>
-            </div>
+            {currentRide.user && (
+              <div className="flex items-center gap-2 text-sm">
+                <User className="w-4 h-4 text-muted-foreground" />
+                <span className="text-foreground">
+                  {currentRide.user.fullName}
+                </span>
+                <span className="text-muted-foreground">•</span>
+                <Phone className="w-4 h-4 text-muted-foreground" />
+                <a
+                  href={`tel:${currentRide.user.phoneNumber}`}
+                  className="text-primary hover:underline"
+                >
+                  {currentRide.user.phoneNumber}
+                </a>
+              </div>
+            )}
             <div className="flex items-start gap-2">
               <MapPin className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-xs text-muted-foreground">Điểm đón</p>
                 <p className="text-sm text-foreground font-medium">
-                  {currentTrip.pickupLocation.address}
+                  {currentRide.pickupAddress}
                 </p>
               </div>
             </div>
@@ -252,53 +530,72 @@ export default function WorkplacePage() {
               <div>
                 <p className="text-xs text-muted-foreground">Điểm đến</p>
                 <p className="text-sm text-foreground font-medium">
-                  {currentTrip.dropoffLocation.address}
+                  {currentRide.destinationAddress}
                 </p>
               </div>
             </div>
+            {currentRide.notes && (
+              <div className="p-3 bg-accent rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Ghi chú:</p>
+                <p className="text-sm text-foreground">{currentRide.notes}</p>
+              </div>
+            )}
             <div className="flex items-center gap-4 pt-2">
               <div className="flex items-center gap-1">
                 <DollarSign className="w-4 h-4 text-primary" />
                 <span className="font-semibold text-foreground">
-                  {currentTrip.price.toLocaleString()}đ
+                  {currentRide.estimatedPrice?.toLocaleString()}đ
                 </span>
               </div>
               <span className="text-sm text-muted-foreground">
-                {currentTrip.distance} km
+                {currentRide.distance?.toFixed(1)} km
               </span>
+              {currentRide.estimatedDuration && (
+                <span className="text-sm text-muted-foreground">
+                  ~{Math.round(currentRide.estimatedDuration)} phút
+                </span>
+              )}
             </div>
           </div>
 
           {/* FR-14: Trip progress buttons */}
           <div className="flex gap-2">
-            {currentTrip.status === "accepted" && (
+            {currentRide.status === RIDE_STATUS.ACCEPTED && (
               <Button
-                onClick={() => handleUpdateStatus("arriving")}
+                onClick={() => handleUpdateStatus(RIDE_STATUS.ARRIVING)}
+                loading={loading.status}
                 className="flex-1"
+                type="primary"
               >
-                Đang đến
+                Đang đến điểm đón
               </Button>
             )}
-            {currentTrip.status === "arriving" && (
+            {currentRide.status === RIDE_STATUS.ARRIVING && (
               <Button
-                onClick={() => handleUpdateStatus("arrived")}
+                onClick={() => handleUpdateStatus(RIDE_STATUS.ARRIVED)}
+                loading={loading.status}
                 className="flex-1"
+                type="primary"
               >
                 Đã đến điểm đón
               </Button>
             )}
-            {currentTrip.status === "arrived" && (
+            {currentRide.status === RIDE_STATUS.ARRIVED && (
               <Button
-                onClick={() => handleUpdateStatus("in_progress")}
+                onClick={() => handleUpdateStatus(RIDE_STATUS.IN_PROGRESS)}
+                loading={loading.status}
                 className="flex-1"
+                type="primary"
               >
                 Bắt đầu chuyến đi
               </Button>
             )}
-            {currentTrip.status === "in_progress" && (
+            {currentRide.status === RIDE_STATUS.IN_PROGRESS && (
               <Button
-                onClick={() => handleUpdateStatus("completed")}
+                onClick={() => handleUpdateStatus(RIDE_STATUS.COMPLETED)}
+                loading={loading.status}
                 className="flex-1"
+                type="primary"
               >
                 Hoàn thành
               </Button>
@@ -313,14 +610,14 @@ export default function WorkplacePage() {
             </div>
             <h3 className="font-semibold text-foreground mb-2">
               {isOnline
-                ? pendingTrips.length > 0
+                ? pendingRides.length > 0
                   ? "Chọn chuyến để nhận"
                   : "Đang chờ chuyến mới"
                 : "Bạn đang offline"}
             </h3>
             <p className="text-sm text-muted-foreground">
               {isOnline
-                ? pendingTrips.length > 0
+                ? pendingRides.length > 0
                   ? "Nhấn vào chuyến để xem chi tiết và nhận"
                   : "Hệ thống sẽ tự động thông báo khi có chuyến mới"
                 : "Bật trạng thái online để nhận chuyến"}
@@ -329,7 +626,7 @@ export default function WorkplacePage() {
         </Card>
       )}
 
-      {/* FR-13: Trip Details Modal */}
+      {/* FR-13: Ride Details Modal */}
       <Modal
         title={
           <div className="flex items-center gap-2">
@@ -337,48 +634,56 @@ export default function WorkplacePage() {
             <span>Chi tiết yêu cầu</span>
           </div>
         }
-        open={showIncomingModal}
-        closable={false}
+        open={showRideModal}
+        onCancel={() => !loading.accept && handleRejectRide()}
         footer={[
-          <Button key="reject" variant="outline" onClick={handleRejectTrip}>
+          <Button
+            key="reject"
+            onClick={handleRejectRide}
+            disabled={loading.accept}
+          >
             Từ chối
           </Button>,
-          <Button key="accept" onClick={() => handleAcceptTrip(selectedTrip)}>
+          <Button
+            key="accept"
+            type="primary"
+            onClick={handleAcceptRide}
+            loading={loading.accept}
+          >
             Nhận chuyến
           </Button>,
         ]}
       >
-        {selectedTrip && (
+        {selectedRide && (
           <div className="py-4">
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 text-muted-foreground" />
               <span className="font-medium text-foreground">
-                {selectedTrip.customerName}
+                {selectedRide.user?.fullName || "Khách hàng"}
               </span>
             </div>
             <div className="flex items-center gap-2 mt-1">
               <Phone className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">
-                {selectedTrip.customerPhone}
+                {selectedRide.user?.phoneNumber || "N/A"}
               </span>
             </div>
-            {selectedTrip.createdAt && (
-              <div className="flex items-center gap-2 mt-1">
-                <Clock className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  {format(new Date(selectedTrip.createdAt), "HH:mm:ss", {
-                    locale: vi,
-                  })}
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 mt-1">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                Yêu cầu lúc:{" "}
+                {format(new Date(selectedRide.requestedAt), "HH:mm:ss", {
+                  locale: vi,
+                })}
+              </span>
+            </div>
             <div className="space-y-3 mb-4 mt-4">
               <div className="flex items-start gap-2">
                 <MapPin className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-xs text-muted-foreground">Điểm đón</p>
                   <p className="text-sm text-foreground font-medium">
-                    {selectedTrip.pickupLocation.address}
+                    {selectedRide.pickupAddress}
                   </p>
                 </div>
               </div>
@@ -387,7 +692,7 @@ export default function WorkplacePage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Điểm đến</p>
                   <p className="text-sm text-foreground font-medium">
-                    {selectedTrip.dropoffLocation.address}
+                    {selectedRide.destinationAddress}
                   </p>
                 </div>
               </div>
@@ -396,30 +701,39 @@ export default function WorkplacePage() {
               <div>
                 <p className="text-xs text-muted-foreground">Khoảng cách</p>
                 <p className="text-sm font-semibold text-foreground">
-                  {selectedTrip.distance} km
+                  {selectedRide.distance?.toFixed(1)} km
                 </p>
+                {selectedRide.distanceFromDriver && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {selectedRide.distanceFromDriver.toFixed(1)} km từ bạn
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Thu nhập</p>
                 <p className="text-xl font-bold text-primary">
-                  {selectedTrip.price.toLocaleString()}đ
+                  {selectedRide.estimatedPrice?.toLocaleString()}đ
                 </p>
+                {selectedRide.estimatedDuration && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ~{Math.round(selectedRide.estimatedDuration)} phút
+                  </p>
+                )}
               </div>
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Vehicle Configuration Modal */}
+      <VehicleConfigModal
+        open={showVehicleModal}
+        onClose={() => setShowVehicleModal(false)}
+        onSuccess={() => {
+          setHasVehicle(true);
+          message.success("Bạn có thể bật trạng thái online để nhận chuyến!");
+        }}
+      />
     </div>
   );
-}
-
-function getStatusText(status) {
-  const texts = {
-    accepted: "Đã nhận",
-    arriving: "Đang đến",
-    arrived: "Đã đến",
-    in_progress: "Đang đi",
-    completed: "Hoàn thành",
-  };
-  return texts[status] || status;
 }
