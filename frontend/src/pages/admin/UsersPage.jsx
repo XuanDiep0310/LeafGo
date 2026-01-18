@@ -12,6 +12,7 @@ import {
   message,
   Popconfirm,
   Card,
+  Pagination,
 } from "antd";
 import {
   UserPlus,
@@ -22,117 +23,143 @@ import {
   Search,
   Star,
 } from "lucide-react";
-import { mockApi } from "../../services/mockData";
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  toggleUserStatus,
+} from "../../services/adminService";
 
 const { Option } = Select;
 
 // Implements FR-16, FR-17
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [form] = Form.useForm();
+
+  // Filters
   const [searchText, setSearchText] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
     fetchUsers();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [users, searchText, roleFilter, statusFilter]);
+  }, [currentPage, pageSize, searchText, roleFilter, statusFilter]);
 
   const fetchUsers = async () => {
     try {
-      const allUsers = await mockApi.getAllUsers();
-      setUsers(allUsers.filter((u) => u.role !== "admin"));
+      setLoading(true);
+      const response = await getUsers({
+        Page: currentPage,
+        PageSize: pageSize,
+        Search: searchText || undefined,
+        Role: roleFilter || undefined,
+        IsActive: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
+      });
+
+      if (response.success) {
+        setUsers(response.data.items);
+        setTotalItems(response.data.totalItems);
+      } else {
+        message.error(response.message || 'Lỗi khi tải danh sách người dùng');
+      }
     } catch (error) {
-      message.error("Lỗi khi tải danh sách người dùng");
+      console.error('Error fetching users:', error);
+      message.error(error.response?.data?.error || 'Không thể tải danh sách người dùng');
     } finally {
       setLoading(false);
     }
   };
 
-  const applyFilters = () => {
-    let filtered = [...users];
-
-    // Search by name, email, or phone
-    if (searchText) {
-      filtered = filtered.filter(
-        (user) =>
-          user.fullName?.toLowerCase().includes(searchText.toLowerCase()) ||
-          user.email?.toLowerCase().includes(searchText.toLowerCase()) ||
-          user.phone?.includes(searchText)
-      );
-    }
-
-    // Filter by role
-    if (roleFilter !== "all") {
-      filtered = filtered.filter((user) => user.role === roleFilter);
-    }
-
-    // Filter by status
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((user) => {
-        if (statusFilter === "active") return user.isActive;
-        if (statusFilter === "inactive") return !user.isActive;
-        return true;
-      });
-    }
-
-    setFilteredUsers(filtered);
-  };
-
   // FR-16: Create/Update user
   const handleSubmit = async (values) => {
     try {
+      let response;
       if (editingUser) {
-        await mockApi.updateUser(editingUser.id, values);
-        message.success("Cập nhật thành công");
+        // Update existing user
+        response = await updateUser(editingUser.id, {
+          fullName: values.fullName,
+          phoneNumber: values.phoneNumber,
+          isActive: values.isActive ?? editingUser.isActive,
+        });
       } else {
-        await mockApi.createUser(values);
-        message.success("Tạo tài khoản thành công");
+        // Create new user
+        response = await createUser({
+          email: values.email,
+          password: values.password,
+          fullName: values.fullName,
+          phoneNumber: values.phoneNumber,
+          role: values.role,
+        });
       }
-      setModalVisible(false);
-      form.resetFields();
-      setEditingUser(null);
-      fetchUsers();
+
+      if (response.success) {
+        message.success(editingUser ? 'Cập nhật thành công' : 'Tạo tài khoản thành công');
+        setModalVisible(false);
+        form.resetFields();
+        setEditingUser(null);
+        fetchUsers();
+      } else {
+        message.error(response.message || 'Có lỗi xảy ra');
+      }
     } catch (error) {
-      message.error("Có lỗi xảy ra");
+      console.error('Error saving user:', error);
+      message.error(error.response?.data?.error || error.message || 'Có lỗi xảy ra');
     }
   };
 
   // FR-16: Delete user
   const handleDelete = async (id) => {
     try {
-      await mockApi.deleteUser(id);
-      message.success("Xóa tài khoản thành công");
-      fetchUsers();
+      const response = await deleteUser(id);
+
+      if (response.success) {
+        message.success('Xóa tài khoản thành công');
+        fetchUsers();
+      } else {
+        message.error(response.message || 'Có lỗi xảy ra');
+      }
     } catch (error) {
-      message.error("Có lỗi xảy ra");
+      console.error('Error deleting user:', error);
+      message.error(error.response?.data?.error || 'Có lỗi xảy ra');
     }
   };
 
   // FR-17: Toggle user active status
   const handleToggleStatus = async (user) => {
     try {
-      await mockApi.toggleUserStatus(user.id);
-      message.success(
-        user.isActive ? "Đã khóa tài khoản" : "Đã mở khóa tài khoản"
-      );
-      fetchUsers();
+      const response = await toggleUserStatus(user.id, !user.isActive);
+
+      if (response.success) {
+        message.success(user.isActive ? 'Đã khóa tài khoản' : 'Đã mở khóa tài khoản');
+        fetchUsers();
+      } else {
+        message.error(response.message || 'Có lỗi xảy ra');
+      }
     } catch (error) {
-      message.error("Có lỗi xảy ra");
+      console.error('Error toggling user status:', error);
+      message.error(error.response?.data?.error || 'Có lỗi xảy ra');
     }
   };
 
   const handleEdit = (user) => {
     setEditingUser(user);
-    form.setFieldsValue(user);
+    form.setFieldsValue({
+      fullName: user.fullName,
+      email: user.email,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+      isActive: user.isActive,
+    });
     setModalVisible(true);
   };
 
@@ -140,6 +167,11 @@ export default function AdminUsersPage() {
     setEditingUser(null);
     form.resetFields();
     setModalVisible(true);
+  };
+
+  const handleSearch = () => {
+    setCurrentPage(1);
+    fetchUsers();
   };
 
   const columns = [
@@ -165,8 +197,8 @@ export default function AdminUsersPage() {
     },
     {
       title: "Số điện thoại",
-      dataIndex: "phone",
-      key: "phone",
+      dataIndex: "phoneNumber",
+      key: "phoneNumber",
     },
     {
       title: "Vai trò",
@@ -174,14 +206,14 @@ export default function AdminUsersPage() {
       key: "role",
       render: (role, record) => (
         <div className="flex items-center gap-2">
-          <Tag color={role === "driver" ? "blue" : "green"}>
-            {role === "driver" ? "Tài xế" : "Khách hàng"}
+          <Tag color={role === "Driver" ? "blue" : "green"}>
+            {role === "Driver" ? "Tài xế" : "Khách hàng"}
           </Tag>
-          {role === "driver" && record.rating && (
+          {role === "Driver" && record.stats && record.stats.averageRating > 0 && (
             <div className="flex items-center gap-1">
               <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
               <span className="text-xs font-semibold text-yellow-600">
-                {record.rating.toFixed(1)}/5
+                {record.stats.averageRating.toFixed(1)}/5
               </span>
             </div>
           )}
@@ -195,6 +227,16 @@ export default function AdminUsersPage() {
       render: (isActive) => (
         <Tag color={isActive ? "success" : "error"}>
           {isActive ? "Hoạt động" : "Đã khóa"}
+        </Tag>
+      ),
+    },
+    {
+      title: "Online",
+      dataIndex: "isOnline",
+      key: "isOnline",
+      render: (isOnline) => (
+        <Tag color={isOnline ? "blue" : "default"}>
+          {isOnline ? "Online" : "Offline"}
         </Tag>
       ),
     },
@@ -260,6 +302,7 @@ export default function AdminUsersPage() {
             prefix={<Search className="w-4 h-4 text-muted-foreground" />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
+            onPressEnter={handleSearch}
             className="flex-1"
             size="large"
           />
@@ -268,30 +311,50 @@ export default function AdminUsersPage() {
             onChange={setRoleFilter}
             style={{ width: 150 }}
             size="large"
+            placeholder="Vai trò"
           >
-            <Option value="all">Tất cả vai trò</Option>
-            <Option value="user">Khách hàng</Option>
-            <Option value="driver">Tài xế</Option>
+            <Option value="">Tất cả</Option>
+            <Option value="User">Khách hàng</Option>
+            <Option value="Driver">Tài xế</Option>
           </Select>
           <Select
             value={statusFilter}
             onChange={setStatusFilter}
             style={{ width: 150 }}
             size="large"
+            placeholder="Trạng thái"
           >
-            <Option value="all">Tất cả trạng thái</Option>
+            <Option value="">Tất cả</Option>
             <Option value="active">Hoạt động</Option>
             <Option value="inactive">Đã khóa</Option>
           </Select>
+          <Button type="primary" onClick={handleSearch}>
+            Tìm kiếm
+          </Button>
         </div>
       </Card>
 
       <Table
         columns={columns}
-        dataSource={filteredUsers}
+        dataSource={users}
         rowKey="id"
         loading={loading}
+        pagination={false}
       />
+
+      <div className="mt-4 flex justify-end">
+        <Pagination
+          current={currentPage}
+          pageSize={pageSize}
+          total={totalItems}
+          onChange={(page, size) => {
+            setCurrentPage(page);
+            setPageSize(size);
+          }}
+          showSizeChanger
+          showTotal={(total) => `Tổng ${total} người dùng`}
+        />
+      </div>
 
       {/* Create/Edit Modal */}
       <Modal
@@ -314,43 +377,39 @@ export default function AdminUsersPage() {
           >
             <Input />
           </Form.Item>
+
+          {!editingUser && (
+            <Form.Item
+              name="email"
+              label="Email"
+              rules={[
+                { required: true, message: "Vui lòng nhập email" },
+                { type: "email", message: "Email không hợp lệ" },
+              ]}
+            >
+              <Input />
+            </Form.Item>
+          )}
+
           <Form.Item
-            name="email"
-            label="Email"
-            rules={[
-              { required: true, message: "Vui lòng nhập email" },
-              { type: "email", message: "Email không hợp lệ" },
-            ]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="phone"
+            name="phoneNumber"
             label="Số điện thoại"
             rules={[{ required: true, message: "Vui lòng nhập số điện thoại" }]}
           >
             <Input />
           </Form.Item>
-          <Form.Item
-            name="role"
-            label="Vai trò"
-            rules={[{ required: true, message: "Vui lòng chọn vai trò" }]}
-          >
-            <Select>
-              <Option value="user">Khách hàng</Option>
-              <Option value="driver">Tài xế</Option>
-            </Select>
-          </Form.Item>
+
           {!editingUser && (
             <>
               <Form.Item
-                name="username"
-                label="Tên đăng nhập"
-                rules={[
-                  { required: true, message: "Vui lòng nhập tên đăng nhập" },
-                ]}
+                name="role"
+                label="Vai trò"
+                rules={[{ required: true, message: "Vui lòng chọn vai trò" }]}
               >
-                <Input />
+                <Select>
+                  <Option value="User">Khách hàng</Option>
+                  <Option value="Driver">Tài xế</Option>
+                </Select>
               </Form.Item>
               <Form.Item
                 name="password"
@@ -360,6 +419,19 @@ export default function AdminUsersPage() {
                 <Input.Password />
               </Form.Item>
             </>
+          )}
+
+          {editingUser && (
+            <Form.Item
+              name="isActive"
+              label="Trạng thái"
+              valuePropName="checked"
+            >
+              <Select>
+                <Option value={true}>Hoạt động</Option>
+                <Option value={false}>Đã khóa</Option>
+              </Select>
+            </Form.Item>
           )}
         </Form>
       </Modal>
