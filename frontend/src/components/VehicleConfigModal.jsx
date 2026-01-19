@@ -194,7 +194,7 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
 
             {fetching ? (
                 <div className="py-8 text-center">
-                    <Spin tip="Đang tải thông tin..." />
+                    <Spin tip="Đang tải thông tin..." fullscreen={false} />
                 </div>
             ) : (
                 <Form form={form} layout="vertical" onFinish={handleSubmit}>

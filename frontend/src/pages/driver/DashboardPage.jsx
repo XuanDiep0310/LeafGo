@@ -9,12 +9,12 @@ import { getDriverStatistics } from "../../services/driverService"
 export default function DriverDashboardPage() {
   const { user } = useSelector((state) => state.auth)
   const [stats, setStats] = useState({
-    todayEarnings: 0,
-    todayTrips: 0,
-    monthEarnings: 0,
-    monthTrips: 0,
-    totalTrips: 0,
-    averageRating: 0,
+    TodayEarnings: 0,
+    TodayRides: 0,
+    ThisMonthEarnings: 0,
+    ThisMonthRides: 0,
+    TotalRides: 0,
+    AverageRating: 0,
   })
   const [loading, setLoading] = useState(true)
 
@@ -25,18 +25,36 @@ export default function DriverDashboardPage() {
   const fetchStats = async () => {
     try {
       setLoading(true)
-      const data = await getDriverStatistics()
+      const response = await getDriverStatistics()
 
+      console.log('[DashboardPage] Statistics response:', response)
+      console.log('[DashboardPage] Response type:', typeof response)
+      console.log('[DashboardPage] Response keys:', Object.keys(response || {}))
+
+      // Handle different response structures
+      let data = response
+
+      // If nested in response.data
+      if (response?.data && typeof response.data === 'object' && !Array.isArray(response.data)) {
+        data = response.data
+        console.log('[DashboardPage] Found data in response.data')
+      }
+
+      console.log('[DashboardPage] Final extracted data:', data)
+      console.log('[DashboardPage] Data keys:', Object.keys(data || {}))
+
+      // Try both PascalCase and camelCase
       setStats({
-        todayEarnings: data.todayEarnings || 0,
-        todayTrips: data.todayTrips || 0,
-        monthEarnings: data.monthEarnings || 0,
-        monthTrips: data.monthTrips || 0,
-        totalTrips: data.totalTrips || 0,
-        averageRating: data.averageRating || 0,
+        TodayEarnings: data?.TodayEarnings || data?.todayEarnings || 0,
+        TodayRides: data?.TodayRides || data?.todayRides || 0,
+        ThisMonthEarnings: data?.ThisMonthEarnings || data?.thisMonthEarnings || 0,
+        ThisMonthRides: data?.ThisMonthRides || data?.thisMonthRides || 0,
+        TotalRides: data?.TotalRides || data?.totalRides || 0,
+        AverageRating: data?.AverageRating || data?.averageRating || 0,
       })
     } catch (error) {
       console.error("Error fetching stats:", error)
+      console.error("Error details:", error.response?.data)
       message.error("Không thể tải thống kê")
     } finally {
       setLoading(false)
@@ -62,7 +80,7 @@ export default function DriverDashboardPage() {
         <Card>
           <Statistic
             title="Thu nhập hôm nay"
-            value={stats.todayEarnings}
+            value={stats.TodayEarnings}
             prefix={<DollarSign className="w-4 h-4" />}
             suffix="đ"
             valueStyle={{ color: "#10b981" }}
@@ -71,7 +89,7 @@ export default function DriverDashboardPage() {
         <Card>
           <Statistic
             title="Chuyến hôm nay"
-            value={stats.todayTrips}
+            value={stats.TodayRides}
             prefix={<TrendingUp className="w-4 h-4" />}
             valueStyle={{ color: "#10b981" }}
           />
@@ -79,7 +97,7 @@ export default function DriverDashboardPage() {
         <Card>
           <Statistic
             title="Thu nhập tháng"
-            value={stats.monthEarnings}
+            value={stats.ThisMonthEarnings}
             prefix={<Calendar className="w-4 h-4" />}
             suffix="đ"
             valueStyle={{ color: "#10b981" }}
@@ -88,7 +106,7 @@ export default function DriverDashboardPage() {
         <Card>
           <Statistic
             title="Tổng chuyến"
-            value={stats.totalTrips}
+            value={stats.TotalRides}
             prefix={<Star className="w-4 h-4" />}
             valueStyle={{ color: "#10b981" }}
           />
@@ -109,7 +127,7 @@ export default function DriverDashboardPage() {
           <div>
             <p className="text-sm text-muted-foreground mb-1">Đánh giá</p>
             <p className="font-medium text-foreground">
-              ⭐ {stats.averageRating.toFixed(1)} / 5.0
+              ⭐ {stats.AverageRating.toFixed(1)} / 5.0
             </p>
           </div>
           <div>

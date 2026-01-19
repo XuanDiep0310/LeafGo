@@ -138,12 +138,12 @@ export async function getHealth() {
 }
 
 export async function getUserProfile() {
-    const res = await apiClient.get("/api/User/profile");
+    const res = await apiClient.get("/api/Users/profile");
     return res.data;
 }
 
 export async function updateUserProfile(payload) {
-    const res = await apiClient.put("/api/User/profile", payload);
+    const res = await apiClient.put("/api/Users/profile", payload);
     return res.data;
 }
 

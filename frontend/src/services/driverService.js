@@ -66,9 +66,9 @@ export async function acceptRide(rideId, version) {
  * @returns {Promise} API response
  */
 export async function updateRideStatus(rideId, status, finalPrice) {
-    const payload = { rideId, status };
+    const payload = { RideId: rideId, Status: status };
     if (finalPrice !== undefined) {
-        payload.finalPrice = finalPrice;
+        payload.FinalPrice = finalPrice;
     }
     const res = await apiClient.put("/api/Drivers/update-ride-status", payload);
     return res.data;

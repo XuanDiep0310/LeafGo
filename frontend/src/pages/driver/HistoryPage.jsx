@@ -65,28 +65,35 @@ export default function DriverHistoryPage() {
         return
       }
 
-      const mappedTrips = items.map((ride) => ({
-        id: ride.id,
-        createdAt: ride.requestTime || ride.createdAt,
-        userId: ride.customerId,
-        customerName: ride.customerName || "Khách hàng",
-        customerPhone: ride.customerPhone || "",
-        pickupLocation: {
-          address: ride.pickupAddress,
-          lat: ride.pickupLatitude,
-          lng: ride.pickupLongitude,
-        },
-        dropoffLocation: {
-          address: ride.dropoffAddress,
-          lat: ride.dropoffLatitude,
-          lng: ride.dropoffLongitude,
-        },
-        distance: ride.distance,
-        price: ride.finalPrice || ride.estimatedPrice,
-        status: ride.status,
-        rating: ride.rating,
-        comment: ride.comment,
-      }))
+      const mappedTrips = items.map((ride) => {
+        // Validate and parse date
+        const dateStr = ride.requestTime || ride.createdAt || new Date().toISOString()
+        const parsedDate = new Date(dateStr)
+        const validDate = isNaN(parsedDate.getTime()) ? new Date() : parsedDate
+
+        return {
+          id: ride.id,
+          createdAt: validDate,
+          userId: ride.customerId,
+          customerName: ride.customerName || "Khách hàng",
+          customerPhone: ride.customerPhone || "",
+          pickupLocation: {
+            address: ride.pickupAddress || "Chưa có địa chỉ",
+            lat: ride.pickupLatitude || 0,
+            lng: ride.pickupLongitude || 0,
+          },
+          dropoffLocation: {
+            address: ride.dropoffAddress || ride.destinationAddress || "Chưa có địa chỉ",
+            lat: ride.dropoffLatitude || ride.destinationLatitude || 0,
+            lng: ride.dropoffLongitude || ride.destinationLongitude || 0,
+          },
+          distance: ride.distance || 0,
+          price: ride.finalPrice || ride.estimatedPrice || 0,
+          status: ride.status,
+          rating: ride.rating,
+          comment: ride.comment,
+        }
+      })
 
       setTrips(mappedTrips)
       const totalCount = response.data?.totalCount || response.totalCount || 0
@@ -184,9 +191,14 @@ export default function DriverHistoryPage() {
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                      {format(new Date(trip.createdAt), "dd/MM/yyyy HH:mm", {
-                        locale: vi,
-                      })}
+                      {(() => {
+                        try {
+                          const date = trip.createdAt instanceof Date ? trip.createdAt : new Date(trip.createdAt)
+                          return isNaN(date.getTime()) ? "Ngày không xác định" : format(date, "dd/MM/yyyy HH:mm", { locale: vi })
+                        } catch (e) {
+                          return "Ngày không xác định"
+                        }
+                      })()}
                     </span>
                   </div>
                   <Tag color={trip.status === "Completed" ? "green" : "red"}>
@@ -239,11 +251,11 @@ export default function DriverHistoryPage() {
                     <div className="flex items-center gap-1">
                       <DollarSign className="w-4 h-4 text-primary" />
                       <span className="font-semibold text-primary">
-                        {trip.price.toLocaleString()}đ
+                        {(trip.price || 0).toLocaleString()}đ
                       </span>
                     </div>
                     <span className="text-sm text-muted-foreground">
-                      {trip.distance} km
+                      {trip.distance || 0} km
                     </span>
                   </div>
                   {trip.rating && (

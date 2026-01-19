@@ -10,31 +10,30 @@ import {
   Polyline,
   useMap,
 } from "react-leaflet";
-import { AutoComplete, Card, Modal, Select, Button } from "antd";
+import { AutoComplete, Card, Modal, Select, Button, message } from "antd";
 import { MapPin, Navigation, ArrowLeftRight, Crosshair } from "lucide-react";
-import {
-  setPickupLocation,
-  setDropoffLocation,
-  createBooking,
-  updateTripStatus,
-  rateTrip,
-  clearCurrentTrip,
-} from "../../store/slices/bookingSlice";
 import {
   searchLocations,
   getRoute,
   getCurrentLocation,
   reverseGeocode,
 } from "../../services/locationService";
-import { calculateTripPrice, mockApi } from "../../services/mockData";
+import {
+  getVehicleTypes,
+  calculateTripPrice,
+  createRide,
+  getRideById,
+  getActiveRide,
+  cancelRide,
+  submitRating,
+} from "../../services/bookingService";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
 // Fix Leaflet marker icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
@@ -49,101 +48,90 @@ function MapUpdater({ center }) {
   return null;
 }
 
-// Implements FR-05, FR-06, FR-07, FR-08, FR-09
 export default function BookingPage() {
-  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { pickupLocation, dropoffLocation, currentTrip, loading } = useSelector(
-    (state) => state.booking
-  );
 
+  const [pickupLocation, setPickupLocation] = useState(null);
+  const [dropoffLocation, setDropoffLocation] = useState(null);
   const [pickupSearch, setPickupSearch] = useState("");
   const [dropoffSearch, setDropoffSearch] = useState("");
   const [pickupOptions, setPickupOptions] = useState([]);
   const [dropoffOptions, setDropoffOptions] = useState([]);
-  const [mapCenter, setMapCenter] = useState([21.0285, 105.8542]); // Hanoi center
-  const [showTripModal, setShowTripModal] = useState(false);
-  const [tripStatus, setTripStatus] = useState("");
-  const [vehicleTypeId, setVehicleTypeId] = useState("bike");
+  const [mapCenter, setMapCenter] = useState([21.0285, 105.8542]);
+
   const [vehicleTypes, setVehicleTypes] = useState([]);
-  const [noDriverFound, setNoDriverFound] = useState(false);
+  const [selectedVehicleTypeId, setSelectedVehicleTypeId] = useState(null);
 
   const [route, setRoute] = useState(null);
-  const [estimatedPrice, setEstimatedPrice] = useState(0);
-  const [distance, setDistance] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [priceData, setPriceData] = useState(null);
+  const [routeConfirmed, setRouteConfirmed] = useState(false);
+  const [loadingRoute, setLoadingRoute] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
-  const [driverInfo, setDriverInfo] = useState(null);
+  const [loadingBooking, setLoadingBooking] = useState(false);
+
+  const [currentRide, setCurrentRide] = useState(null);
+  const [showTripModal, setShowTripModal] = useState(false);
+  const [pollingInterval, setPollingInterval] = useState(null);
+
   const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
-  const [routeConfirmed, setRouteConfirmed] = useState(false);
-  const [loadingRoute, setLoadingRoute] = useState(false);
 
+  // Load vehicle types on mount
   useEffect(() => {
-    // Fetch vehicle types
-    mockApi.getVehicleTypes().then(setVehicleTypes);
+    loadVehicleTypes();
+    checkActiveRide();
   }, []);
+
+  // Poll for ride updates when there's an active ride
   useEffect(() => {
-    if (!pickupLocation || !dropoffLocation) {
-      setRoute(null);
-      setEstimatedPrice(0);
-      setDistance(0);
-      setDuration(0);
-      setRouteConfirmed(false);
-    }
-  }, [pickupLocation, dropoffLocation]);
+    if (currentRide && !['Completed', 'Cancelled'].includes(currentRide.status)) {
+      const interval = setInterval(() => {
+        pollRideStatus();
+      }, 3000); // Poll every 3 seconds
+      setPollingInterval(interval);
 
-  const fetchRoute = async () => {
-    if (!pickupLocation || !dropoffLocation) {
-      console.error("Missing pickup or dropoff location");
-      return;
+      return () => clearInterval(interval);
+    } else if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
     }
+  }, [currentRide]);
 
-    setLoadingRoute(true);
+  const loadVehicleTypes = async () => {
     try {
-      console.log("[BookingPage] Fetching route...");
-      const routeData = await getRoute(pickupLocation, dropoffLocation);
-
-      console.log("[BookingPage] Route data received:", routeData);
-
-      if (
-        routeData &&
-        routeData.coordinates &&
-        routeData.coordinates.length > 0 &&
-        routeData.distance > 0
-      ) {
-        setRoute(routeData);
-        setDistance(routeData.distance);
-        setDuration(routeData.duration);
-        const price = calculateTripPrice(routeData.distance);
-        setEstimatedPrice(price);
-        setRouteConfirmed(true);
-        console.log("[BookingPage] Route confirmed:", {
-          distance: routeData.distance,
-          duration: routeData.duration,
-          price,
-          coordinatesCount: routeData.coordinates.length,
-        });
-      } else {
-        console.error("[BookingPage] Invalid route data:", routeData);
-        setRouteConfirmed(false);
+      const types = await getVehicleTypes();
+      setVehicleTypes(types);
+      if (types.length > 0 && !selectedVehicleTypeId) {
+        setSelectedVehicleTypeId(types[0].id);
       }
     } catch (error) {
-      console.error("[BookingPage] Error fetching route:", error);
-      setRouteConfirmed(false);
-    } finally {
-      setLoadingRoute(false);
+      message.error('Không thể tải danh sách loại xe');
     }
   };
 
-  // Recalculate price when vehicle type changes
-  useEffect(() => {
-    if (distance > 0) {
-      const newPrice = calculateTripPrice(distance, vehicleTypeId);
-      setEstimatedPrice(newPrice);
+  const checkActiveRide = async () => {
+    try {
+      const activeRide = await getActiveRide();
+      if (activeRide) {
+        setCurrentRide(activeRide);
+        setShowTripModal(true);
+      }
+    } catch (error) {
+      console.error('Error checking active ride:', error);
     }
-  }, [vehicleTypeId]);
+  };
+
+  const pollRideStatus = async () => {
+    if (!currentRide?.id) return;
+
+    try {
+      const updatedRide = await getRideById(currentRide.id);
+      setCurrentRide(updatedRide);
+    } catch (error) {
+      console.error('Error polling ride status:', error);
+    }
+  };
 
   const handlePickupSearch = async (value) => {
     setPickupSearch(value);
@@ -175,11 +163,10 @@ export default function BookingPage() {
     }
   };
 
-  // FR-05: Handle location selection
   const handlePickupSelect = (value, option) => {
     const location = option.data;
     if (location) {
-      dispatch(setPickupLocation(location));
+      setPickupLocation(location);
       setMapCenter([location.lat, location.lng]);
       setPickupSearch(value);
     }
@@ -188,7 +175,7 @@ export default function BookingPage() {
   const handleDropoffSelect = (value, option) => {
     const location = option.data;
     if (location) {
-      dispatch(setDropoffLocation(location));
+      setDropoffLocation(location);
       setDropoffSearch(value);
     }
   };
@@ -201,28 +188,18 @@ export default function BookingPage() {
 
       if (location) {
         if (type === "pickup") {
-          dispatch(setPickupLocation(location));
+          setPickupLocation(location);
           setPickupSearch(location.fullAddress);
           setMapCenter([location.lat, location.lng]);
-          if (coords.fallback) {
-            console.warn(
-              "[BookingPage] Using fallback location - geolocation may not be available"
-            );
-          }
         } else {
-          dispatch(setDropoffLocation(location));
+          setDropoffLocation(location);
           setDropoffSearch(location.fullAddress);
         }
       } else {
-        alert(
-          "Không tìm thấy thông tin địa chỉ cho vị trí này. Vui lòng nhập địa chỉ thủ công."
-        );
+        message.error("Không tìm thấy địa chỉ cho vị trí này");
       }
     } catch (error) {
-      console.error("[BookingPage] Error getting location:", error);
-      alert(
-        "Không thể lấy vị trí hiện tại. Vui lòng nhập địa chỉ thủ công hoặc kiểm tra quyền truy cập vị trí."
-      );
+      message.error("Không thể lấy vị trí hiện tại");
     } finally {
       setLoadingLocation(false);
     }
@@ -232,8 +209,8 @@ export default function BookingPage() {
     const tempLocation = pickupLocation;
     const tempSearch = pickupSearch;
 
-    dispatch(setPickupLocation(dropoffLocation));
-    dispatch(setDropoffLocation(tempLocation));
+    setPickupLocation(dropoffLocation);
+    setDropoffLocation(tempLocation);
     setPickupSearch(dropoffSearch);
     setDropoffSearch(tempSearch);
 
@@ -241,152 +218,162 @@ export default function BookingPage() {
       setMapCenter([dropoffLocation.lat, dropoffLocation.lng]);
     }
   };
+
+  const fetchRoute = async () => {
+    if (!pickupLocation || !dropoffLocation || !selectedVehicleTypeId) {
+      message.warning('Vui lòng chọn điểm đón, điểm đến và loại xe');
+      return;
+    }
+
+    setLoadingRoute(true);
+    try {
+      // Get route from location service
+      const routeData = await getRoute(pickupLocation, dropoffLocation);
+
+      if (!routeData || !routeData.coordinates || routeData.distance <= 0) {
+        message.error('Không thể tính toán tuyến đường');
+        return;
+      }
+
+      // Calculate price using API
+      const priceResult = await calculateTripPrice(
+        pickupLocation.lat,
+        pickupLocation.lng,
+        dropoffLocation.lat,
+        dropoffLocation.lng,
+        selectedVehicleTypeId
+      );
+
+      setRoute(routeData);
+      setPriceData(priceResult);
+      setRouteConfirmed(true);
+
+      message.success('Đã xác nhận tuyến đường');
+    } catch (error) {
+      message.error('Không thể tính toán giá: ' + error.message);
+      setRouteConfirmed(false);
+    } finally {
+      setLoadingRoute(false);
+    }
+  };
+
+  const handleBooking = async () => {
+    if (!routeConfirmed || !priceData) {
+      message.warning('Vui lòng xác nhận tuyến đường trước');
+      return;
+    }
+
+    setLoadingBooking(true);
+    try {
+      const rideData = {
+        vehicleTypeId: selectedVehicleTypeId,
+        pickupAddress: pickupLocation.fullAddress,
+        pickupLatitude: pickupLocation.lat,
+        pickupLongitude: pickupLocation.lng,
+        destinationAddress: dropoffLocation.fullAddress,
+        destinationLatitude: dropoffLocation.lat,
+        destinationLongitude: dropoffLocation.lng,
+        distance: priceData.distance,
+        estimatedDuration: priceData.estimatedDuration,
+        estimatedPrice: priceData.estimatedPrice,
+        notes: ''
+      };
+
+      const result = await createRide(rideData);
+      setCurrentRide(result);
+      setShowTripModal(true);
+      message.success('Đã tạo chuyến đi thành công');
+
+      // Reset form
+      setRouteConfirmed(false);
+      setPriceData(null);
+      setRoute(null);
+    } catch (error) {
+      message.error('Không thể tạo chuyến đi: ' + error.message);
+    } finally {
+      setLoadingBooking(false);
+    }
+  };
+
+  const handleCancelRide = async () => {
+    if (!currentRide?.id) return;
+
+    try {
+      await cancelRide(currentRide.id, 'Người dùng hủy chuyến');
+      message.success('Đã hủy chuyến đi');
+      setShowTripModal(false);
+      setCurrentRide(null);
+    } catch (error) {
+      message.error('Không thể hủy chuyến: ' + error.message);
+    }
+  };
+
   const handleSubmitRating = async () => {
     if (rating === 0) {
+      message.warning('Vui lòng chọn đánh giá');
       return;
     }
 
     try {
-      await dispatch(
-        rateTrip({
-          tripId: currentTrip?.id,
-          rating,
-          comment: ratingComment,
-        })
-      ).unwrap();
-
+      await submitRating(currentRide.id, rating, ratingComment);
       setRatingSubmitted(true);
+      message.success('Cảm ơn bạn đã đánh giá!');
+
       setTimeout(() => {
         setShowTripModal(false);
-        dispatch(clearCurrentTrip());
+        setCurrentRide(null);
         setRating(0);
-        setRatingComment("");
+        setRatingComment('');
         setRatingSubmitted(false);
-        setTripStatus("");
-        setDriverInfo(null);
-      }, 600);
+      }, 1500);
     } catch (error) {
-      console.error("Error submitting rating:", error);
+      message.error('Không thể gửi đánh giá: ' + error.message);
     }
-  };
-  // FR-07: Create booking
-  const handleBooking = async () => {
-    if (!pickupLocation || !dropoffLocation) {
-      return;
-    }
-
-    try {
-      const result = await dispatch(
-        createBooking({
-          userId: user.id,
-          pickupLocation,
-          dropoffLocation,
-          distance,
-          price: estimatedPrice,
-        })
-      ).unwrap();
-
-      setShowTripModal(true);
-      setTripStatus("finding");
-      setDriverInfo(null);
-
-      // FR-08, FR-09: Simulate trip status updates
-      simulateTripProgress(result.id);
-    } catch (error) {
-      console.error("Booking error:", error);
-    }
-  };
-
-  // FR-08, FR-09: Simulate realtime trip status updates
-  const simulateTripProgress = async (tripId) => {
-    setTimeout(() => {
-      const mockDriver = {
-        name: "Trần Văn B",
-        phone: "0987654321",
-        rating: 4.8,
-        vehicle: {
-          licensePlate: "29A-12345",
-          type: "Xe máy",
-          brand: "Honda Wave",
-          color: "Đỏ",
-        },
-      };
-      setDriverInfo(mockDriver);
-      dispatch(updateTripStatus({ status: "accepted", driverId: "driver1" }));
-      setTripStatus("accepted");
-    }, 2000);
-
-    // Driver arriving (5s)
-    setTimeout(() => {
-      dispatch(updateTripStatus({ status: "arriving" }));
-      setTripStatus("arriving");
-    }, 5000);
-
-    setTimeout(() => {
-      dispatch(updateTripStatus({ status: "arrived" }));
-      setTripStatus("arrived");
-    }, 8000);
-
-    setTimeout(() => {
-      dispatch(updateTripStatus({ status: "in_progress" }));
-      setTripStatus("in_progress");
-    }, 10000);
-
-    setTimeout(() => {
-      dispatch(updateTripStatus({ status: "completed" }));
-      setTripStatus("completed");
-      // Don't auto-close modal - wait for user to rate
-    }, 15000);
   };
 
   const getStatusText = () => {
-    switch (tripStatus) {
-      case "finding":
-        return "Đang tìm tài xế...";
-      case "accepted":
-        return "Đã tìm thấy tài xế";
-      case "arriving":
-        return "Tài xế đang đến";
-      case "arrived":
-        return "Tài xế đã đến";
-      case "in_progress":
-        return "Đang di chuyển";
-      case "completed":
-        return "Hoàn thành";
-      default:
-        return "";
-    }
+    if (!currentRide) return '';
+
+    const statusMap = {
+      'Pending': 'Đang tìm tài xế...',
+      'Accepted': 'Đã tìm thấy tài xế',
+      'DriverArriving': 'Tài xế đang đến',
+      'DriverArrived': 'Tài xế đã đến',
+      'InProgress': 'Đang di chuyển',
+      'Completed': 'Hoàn thành',
+      'Cancelled': 'Đã hủy'
+    };
+
+    return statusMap[currentRide.status] || currentRide.status;
   };
 
   return (
     <div className="h-full flex">
-      {/* Left Panel - Booking Form */}
-      <div className="w-96 p-6 bg-card border-r border-border overflow-auto">
-        <h2 className="text-2xl font-bold text-foreground mb-6">
-          Đặt chuyến xe
-        </h2>
+      {/* Left Panel */}
+      <div className="w-96 p-6 bg-white border-r overflow-auto">
+        <h2 className="text-2xl font-bold mb-6">Đặt chuyến xe</h2>
 
-        {/* Vehicle Type Selection */}
+        {/* Vehicle Type */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Loại phương tiện
-          </label>
+          <label className="block text-sm font-medium mb-2">Loại phương tiện</label>
           <Select
-            value={vehicleTypeId}
-            onChange={setVehicleTypeId}
+            value={selectedVehicleTypeId}
+            onChange={setSelectedVehicleTypeId}
             disabled={routeConfirmed}
             className="w-full"
             size="large"
-            options={vehicleTypes.map((vt) => ({
-              label: vt.name,
-              value: vt.id,
-            }))}
-          />
+          >
+            {vehicleTypes.map((vt) => (
+              <Select.Option key={vt.id} value={vt.id}>
+                {vt.name} - {vt.availableDrivers} xe khả dụng
+              </Select.Option>
+            ))}
+          </Select>
         </div>
 
-        {/* FR-05: Pickup location input */}
+        {/* Pickup Location */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label className="block text-sm font-medium mb-2">
             <MapPin className="w-4 h-4 inline mr-1" />
             Điểm đón
           </label>
@@ -402,22 +389,18 @@ export default function BookingPage() {
               disabled={routeConfirmed}
             />
             <Button
-              variant="outline"
-              size="lg"
+              size="large"
               onClick={() => handleGetCurrentLocation("pickup")}
               disabled={loadingLocation || routeConfirmed}
-              className="px-3"
-              title="Lấy vị trí hiện tại"
             >
               <Crosshair className="w-5 h-5" />
             </Button>
           </div>
         </div>
 
+        {/* Swap Button */}
         <div className="flex justify-center -my-2 mb-2">
           <Button
-            variant="ghost"
-            size="sm"
             onClick={handleSwapLocations}
             disabled={!pickupLocation || !dropoffLocation || routeConfirmed}
           >
@@ -425,9 +408,9 @@ export default function BookingPage() {
           </Button>
         </div>
 
-        {/* FR-05: Dropoff location input */}
+        {/* Dropoff Location */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label className="block text-sm font-medium mb-2">
             <Navigation className="w-4 h-4 inline mr-1" />
             Điểm đến
           </label>
@@ -443,364 +426,204 @@ export default function BookingPage() {
               disabled={routeConfirmed}
             />
             <Button
-              variant="outline"
-              size="lg"
+              size="large"
               onClick={() => handleGetCurrentLocation("dropoff")}
               disabled={loadingLocation || routeConfirmed}
-              className="px-3"
-              title="Lấy vị trí hiện tại"
             >
               <Crosshair className="w-5 h-5" />
             </Button>
           </div>
         </div>
 
-        {/* Confirm button to calculate route */}
+        {/* Confirm Route Button */}
         <div className="flex gap-2 mb-6">
           <Button
+            type={routeConfirmed ? "default" : "primary"}
             onClick={fetchRoute}
-            disabled={
-              !pickupLocation ||
-              !dropoffLocation ||
-              loadingRoute ||
-              routeConfirmed
-            }
-            className="flex-1 h-12 text-lg"
-            size="lg"
-            variant={routeConfirmed ? "default" : "outline"}
+            disabled={!pickupLocation || !dropoffLocation || loadingRoute || routeConfirmed}
+            className="flex-1"
+            size="large"
           >
-            {loadingRoute
-              ? "Đang tính toán..."
-              : routeConfirmed
-                ? "✓ Đã xác nhận"
-                : "Xác nhận"}
+            {loadingRoute ? "Đang tính..." : routeConfirmed ? "✓ Đã xác nhận" : "Xác nhận"}
           </Button>
           {routeConfirmed && (
             <Button
               onClick={() => {
                 setRouteConfirmed(false);
                 setRoute(null);
-                setEstimatedPrice(0);
-                setDistance(0);
-                setDuration(0);
+                setPriceData(null);
               }}
-              variant="outline"
-              className="h-12 px-4"
-              size="lg"
+              size="large"
             >
-              ✕ Huỷ
+              Hủy
             </Button>
           )}
         </div>
 
-        {/* FR-06: Price estimation */}
-        {routeConfirmed && distance > 0 && estimatedPrice > 0 && (
-          <Card className="mb-6 bg-secondary border-primary/20">
+        {/* Price Display */}
+        {routeConfirmed && priceData && (
+          <Card className="mb-6">
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">
-                  Khoảng cách
-                </span>
-                <span className="text-lg font-semibold text-foreground">
-                  {distance.toFixed(1)} km
-                </span>
+              <div className="flex justify-between">
+                <span>Khoảng cách</span>
+                <span className="font-semibold">{priceData.distance.toFixed(1)} km</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">
-                  Thời gian dự kiến
-                </span>
-                <span className="text-lg font-semibold text-foreground">
-                  {duration} phút
-                </span>
+              <div className="flex justify-between">
+                <span>Thời gian</span>
+                <span className="font-semibold">{priceData.estimatedDuration} phút</span>
               </div>
-              <div className="flex justify-between items-center pt-2 border-t">
-                <span className="text-sm text-muted-foreground">
-                  Giá dự kiến
-                </span>
+              <div className="flex justify-between pt-2 border-t">
+                <span>Giá dự kiến</span>
                 <span className="text-2xl font-bold text-primary">
-                  {estimatedPrice.toLocaleString()}đ
+                  {priceData.estimatedPrice.toLocaleString()}đ
                 </span>
               </div>
             </div>
           </Card>
         )}
 
-        {/* FR-07: Book button with no driver handling */}
+        {/* Book Button */}
         <Button
+          type="primary"
           onClick={handleBooking}
-          disabled={!routeConfirmed || loading}
-          className="w-full h-12 text-lg"
-          size="lg"
+          disabled={!routeConfirmed || loadingBooking}
+          className="w-full"
+          size="large"
         >
-          {loading ? "Đang xử lý..." : "Đặt xe ngay"}
+          {loadingBooking ? "Đang xử lý..." : "Đặt xe ngay"}
         </Button>
-
-        {/* No Driver Found Modal */}
-        <Modal
-          title="Không tìm thấy tài xế"
-          open={noDriverFound}
-          footer={[
-            <Button key="back" onClick={() => setNoDriverFound(false)}>
-              Quay lại
-            </Button>,
-            <Button key="retry" type="primary" onClick={handleBooking}>
-              Đặt lại
-            </Button>,
-          ]}
-          closable={false}
-        >
-          <div className="text-center py-4">
-            <p className="text-muted-foreground mb-2">
-              Hiện không có tài xế khả dụng cho loại xe này. Vui lòng:
-            </p>
-            <ul className="text-sm text-left text-muted-foreground space-y-1 ml-4">
-              <li>• Thử đổi loại phương tiện khác</li>
-              <li>• Chờ một lúc và đặt lại</li>
-            </ul>
-          </div>
-        </Modal>
-
-        <div className="mt-6 p-4 bg-accent/50 rounded-lg">
-          <h3 className="font-semibold text-foreground mb-2">Lưu ý</h3>
-          <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• Giá có thể thay đổi tùy thuộc vào lưu lượng</li>
-            <li>• Thời gian chờ tài xế tối đa 5 phút</li>
-            <li>• Đánh giá sau chuyến để nhận ưu đãi</li>
-          </ul>
-        </div>
       </div>
 
-      {/* Right Panel - Map */}
+      {/* Map */}
       <div className="flex-1 relative">
         <MapContainer center={mapCenter} zoom={13} className="h-full w-full">
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           <MapUpdater center={mapCenter} />
           {pickupLocation && (
             <Marker position={[pickupLocation.lat, pickupLocation.lng]}>
-              <Popup>
-                Điểm đón: {pickupLocation.fullAddress || pickupLocation.address}
-              </Popup>
+              <Popup>{pickupLocation.fullAddress}</Popup>
             </Marker>
           )}
           {dropoffLocation && (
             <Marker position={[dropoffLocation.lat, dropoffLocation.lng]}>
-              <Popup>
-                Điểm đến:{" "}
-                {dropoffLocation.fullAddress || dropoffLocation.address}
-              </Popup>
+              <Popup>{dropoffLocation.fullAddress}</Popup>
             </Marker>
           )}
-          {route && route.coordinates && route.coordinates.length > 0 && (
-            <Polyline
-              positions={route.coordinates}
-              color="#10b981"
-              weight={4}
-              opacity={0.7}
-              dashArray="5, 5"
-            />
+          {route?.coordinates && (
+            <Polyline positions={route.coordinates} color="#10b981" weight={4} />
           )}
         </MapContainer>
       </div>
 
-      {/* FR-08, FR-09: Trip Status Modal */}
+      {/* Trip Status Modal */}
       <Modal
         title="Trạng thái chuyến đi"
         open={showTripModal}
         footer={null}
-        closable={false}
-        centered
+        closable={currentRide?.status === 'Completed' || currentRide?.status === 'Cancelled'}
+        onCancel={() => {
+          if (currentRide?.status === 'Completed' || currentRide?.status === 'Cancelled') {
+            setShowTripModal(false);
+            setCurrentRide(null);
+          }
+        }}
         width={400}
       >
-        <div className="py-4">
-          {tripStatus === "completed" && !ratingSubmitted ? (
-            // Rating Form
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-foreground text-center mb-4">
-                Đánh giá chuyến đi
-              </h3>
+        {currentRide?.status === 'Completed' && !ratingSubmitted ? (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-center">Đánh giá chuyến đi</h3>
 
-              {/* Driver Information */}
-              {driverInfo && (
-                <Card className="bg-secondary/50 p-3">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tài xế:</span>
-                      <span className="font-semibold">{driverInfo.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Xe:</span>
-                      <span className="font-semibold">
-                        {driverInfo.vehicle.brand} {driverInfo.vehicle.color}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Biển số:</span>
-                      <span className="font-semibold">
-                        {driverInfo.vehicle.licensePlate}
-                      </span>
-                    </div>
+            {currentRide.driver && (
+              <Card>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Tài xế:</span>
+                    <span className="font-semibold">{currentRide.driver.fullName}</span>
                   </div>
-                </Card>
-              )}
-
-              {/* Trip Details */}
-              {distance > 0 && (
-                <Card className="bg-secondary/50 p-3">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">
-                        Khoảng cách:
-                      </span>
-                      <span className="font-semibold">
-                        {distance.toFixed(1)} km
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Thời gian:</span>
-                      <span className="font-semibold">{duration} phút</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Giá tiền:</span>
-                      <span className="font-semibold text-primary">
-                        {estimatedPrice.toLocaleString()}đ
-                      </span>
-                    </div>
+                  <div className="flex justify-between">
+                    <span>Đánh giá:</span>
+                    <span>⭐ {currentRide.driver.averageRating}</span>
                   </div>
-                </Card>
-              )}
-
-              {/* Rating Stars */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Chất lượng dịch vụ
-                </label>
-                <div className="flex justify-center gap-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => setRating(star)}
-                      className="text-4xl transition-transform hover:scale-110"
-                    >
-                      {star <= rating ? "⭐" : "☆"}
-                    </button>
-                  ))}
                 </div>
-                {rating > 0 && (
-                  <p className="text-center text-sm text-muted-foreground mt-2">
-                    {rating === 5 && "Rất tuyệt vời!"}
-                    {rating === 4 && "Tốt lắm!"}
-                    {rating === 3 && "Bình thường"}
-                    {rating === 2 && "Cần cải thiện"}
-                    {rating === 1 && "Không hài lòng"}
-                  </p>
-                )}
-              </div>
+              </Card>
+            )}
 
-              {/* Comment */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Nhận xét (tùy chọn)
-                </label>
-                <textarea
-                  value={ratingComment}
-                  onChange={(e) => setRatingComment(e.target.value)}
-                  placeholder="Chia sẻ trải nghiệm của bạn..."
-                  className="w-full p-2 border border-border rounded-md text-sm"
-                  rows="2"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleSubmitRating}
-                  className="flex-1"
-                  disabled={rating === 0}
-                >
-                  ✓ Xác nhận đánh giá
-                </Button>
-                <Button
-                  onClick={() => {
-                    setShowTripModal(false);
-                    dispatch(clearCurrentTrip());
-                    setRating(0);
-                    setRatingComment("");
-                    setRatingSubmitted(false);
-                    setTripStatus("");
-                    setDriverInfo(null);
-                  }}
-                  variant="outline"
-                  className="px-4"
-                >
-                  ✕
-                </Button>
+            <div>
+              <label className="block text-sm font-medium mb-2">Chất lượng dịch vụ</label>
+              <div className="flex justify-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onClick={() => setRating(star)}
+                    className="text-4xl"
+                  >
+                    {star <= rating ? "⭐" : "☆"}
+                  </button>
+                ))}
               </div>
             </div>
-          ) : (
-            // Trip Status Display
-            <>
-              <div className="mb-4 text-center">
-                <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center animate-pulse">
-                  <Navigation className="w-8 h-8 text-primary" />
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold text-foreground mb-2 text-center">
-                {getStatusText()}
-              </h3>
 
-              {driverInfo && (
-                <Card className="mt-4 bg-accent">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
-                        Tài xế
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        {driverInfo.name}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
-                        Số điện thoại
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        {driverInfo.phone}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
-                        Đánh giá
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        ⭐ {driverInfo.rating}
-                      </span>
-                    </div>
-                    <div className="pt-2 border-t border-border">
-                      <div className="text-sm text-muted-foreground mb-1">
-                        Thông tin xe
-                      </div>
-                      <div className="text-sm text-foreground">
-                        {driverInfo.vehicle.brand} - {driverInfo.vehicle.color}
-                      </div>
-                      <div className="text-sm font-semibold text-foreground">
-                        Biển số: {driverInfo.vehicle.licensePlate}
-                      </div>
-                    </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Nhận xét</label>
+              <textarea
+                value={ratingComment}
+                onChange={(e) => setRatingComment(e.target.value)}
+                placeholder="Chia sẻ trải nghiệm..."
+                className="w-full p-2 border rounded"
+                rows="2"
+              />
+            </div>
+
+            <Button
+              type="primary"
+              onClick={handleSubmitRating}
+              disabled={rating === 0}
+              className="w-full"
+            >
+              Xác nhận đánh giá
+            </Button>
+          </div>
+        ) : (
+          <div className="py-4">
+            <div className="text-center mb-4">
+              <Navigation className="w-16 h-16 mx-auto text-primary animate-pulse" />
+            </div>
+            <h3 className="text-lg font-semibold text-center mb-4">
+              {getStatusText()}
+            </h3>
+
+            {currentRide?.driver && (
+              <Card>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Tài xế</span>
+                    <span className="font-semibold">{currentRide.driver.fullName}</span>
                   </div>
-                </Card>
-              )}
+                  <div className="flex justify-between">
+                    <span>SĐT</span>
+                    <span>{currentRide.driver.phoneNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Biển số</span>
+                    <span className="font-semibold">
+                      {currentRide.driver.vehicle?.licensePlate}
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            )}
 
-              <p className="text-sm text-muted-foreground text-center mt-4">
-                {tripStatus === "completed"
-                  ? "Cảm ơn bạn đã sử dụng Leaf Go!"
-                  : "Vui lòng chờ trong giây lát..."}
-              </p>
-            </>
-          )}
-        </div>
+            {currentRide?.status === 'Pending' && (
+              <Button
+                onClick={handleCancelRide}
+                className="w-full mt-4"
+                danger
+              >
+                Hủy chuyến
+              </Button>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );
