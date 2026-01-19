@@ -24,8 +24,14 @@ namespace LeafGo.Infrastructure.Services
             _configuration = configuration;
             _logger = logger;
 
+            var configuredPath = _configuration["FileUpload:Path"];
+            /// Ưu tiên config, fallback về ContentRootPath + wwwroot/uploads
+            _uploadPath = string.IsNullOrWhiteSpace(configuredPath)
+                ? Path.Combine(_environment.ContentRootPath, "wwwroot", "uploads")
+                : configuredPath.TrimEnd('/', '\\');
+
             // Get upload path from config or use default
-            _uploadPath = _configuration["FileUpload:Path"] ?? Path.Combine(_environment.WebRootPath, "uploads");
+            //_uploadPath = _configuration["FileUpload:Path"] ?? Path.Combine(_environment.WebRootPath, "uploads");
 
             // Ensure upload directory exists
             EnsureDirectoryExists();
