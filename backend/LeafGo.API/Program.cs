@@ -5,11 +5,13 @@ using LeafGo.API.Middleware;
 using LeafGo.Application.Interfaces;
 using LeafGo.Application.Validators;
 using LeafGo.Infrastructure;
+using LeafGo.Infrastructure.Hubs;
 using LeafGo.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using StackExchange.Redis;
 using System.Text;
 
 namespace LeafGo.API
@@ -68,6 +70,35 @@ namespace LeafGo.API
                 )
             );
 
+            // Redis Configuration
+            var redisConnection = builder.Configuration.GetConnectionString("Redis")
+                ?? "localhost:6379";
+
+            builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+            {
+                var configuration = ConfigurationOptions.Parse(redisConnection, true);
+                configuration.AbortOnConnectFail = false;
+                return ConnectionMultiplexer.Connect(configuration);
+            });
+
+            // SignalR
+            builder.Services.AddSignalR(options =>
+            {
+                options.EnableDetailedErrors = true;
+                options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+                options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+            });
+
+            // SignalR with Redis Backplane (for scaling)
+            if (builder.Configuration.GetValue<bool>("SignalR:UseRedisBackplane"))
+            {
+                builder.Services.AddSignalR()
+                    .AddStackExchangeRedis(redisConnection, options =>
+                    {
+                        options.Configuration.ChannelPrefix = "LeafGo";
+                    });
+            }
+
             // JWT Authentication
             var jwtSecret = builder.Configuration["Jwt:Secret"]
                 ?? throw new InvalidOperationException("JWT Secret not configured");
@@ -124,12 +155,20 @@ namespace LeafGo.API
             // Application Services
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddScoped<IDriverService, DriverService>();
+            builder.Services.AddScoped<IAdminService, AdminService>();
+            builder.Services.AddScoped<IRideService, RideService>();
             builder.Services.AddScoped<IJwtService, JwtService>();
             builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
             builder.Services.AddScoped<IEmailService, EmailService>();
             builder.Services.AddScoped<IFileService, LocalFileService>();
-            builder.Services.AddScoped<IDriverService, DriverService>();
-            builder.Services.AddScoped<IAdminService, AdminService>();
+
+            // Redis & Cache Services
+            builder.Services.AddSingleton<IRedisService, RedisService>();
+            builder.Services.AddScoped<ICacheService, CacheService>();
+
+            // SignalR Notification Service
+            builder.Services.AddScoped<INotificationService, NotificationService>();
 
             // Add IWebHostEnvironment for file service
             builder.Services.AddSingleton<IWebHostEnvironment>(builder.Environment);
@@ -177,6 +216,9 @@ namespace LeafGo.API
 
             app.UseAuthentication();
             app.UseAuthorization();
+
+            // Map SignalR Hub
+            app.MapHub<RideHub>("/hubs/ride");
 
             app.MapControllers();
 
