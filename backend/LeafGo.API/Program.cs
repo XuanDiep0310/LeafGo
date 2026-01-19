@@ -194,7 +194,9 @@ namespace LeafGo.API
             var app = builder.Build();
 
             // Configure the HTTP request pipeline
-            if (app.Environment.IsDevelopment())
+            // Enable Swagger in all environments (can be disabled via environment variable)
+            var enableSwagger = builder.Configuration.GetValue<bool>("EnableSwagger", true);
+            if (enableSwagger)
             {
                 app.UseSwagger();
                 app.UseSwaggerUI(c =>
