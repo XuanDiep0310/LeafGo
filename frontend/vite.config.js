@@ -10,15 +10,15 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3001,
+    port: 3000,
     proxy: {
       '/api': {
-        target: 'https://localhost:7206',
+        target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
       },
       '/health': {
-        target: 'https://localhost:7206',
+        target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
       }

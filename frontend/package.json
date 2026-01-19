@@ -41,7 +41,6 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "latest",
     "react-leaflet": "^4.2.1",
-    "react-native": "latest",
     "react-redux": "^9.1.0",
     "react-router-dom": "^6.26.0",
     "redux": "latest",
