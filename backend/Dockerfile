@@ -30,6 +30,9 @@ RUN dotnet publish LeafGo.API.csproj -c Release -o /app/publish /p:UseAppHost=fa
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
+# Cài curl cho healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Chỉ copy những file đã đóng gói (dll) từ giai đoạn 2 sang giai đoạn 3
 COPY --from=publish /app/publish .
 

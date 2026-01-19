@@ -27,6 +27,25 @@ services:
       retries: 20
       start_period: 60s
 
+  redis:
+    image: redis:7-alpine
+    container_name: leafgo-redis
+    ports:
+      # Map cổng 6379 ở ngoài vào cổng 6379 ở trong
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - leafgo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: redis-server --appendonly yes
+
   backend:
     build:
       context: ./backend
@@ -42,14 +61,19 @@ services:
       # QUAN TRỌNG: Server=database,1433 (Luôn dùng cổng 1433 khi gọi nội bộ Docker)
       # Không dùng biến ${MSSQL_PORT} ở đây vì nó sẽ lấy số 14333 -> gây lỗi kết nối nội bộ
       - ConnectionStrings__DefaultConnection=Server=${MSSQL_SERVER:-database},1433;Database=${MSSQL_DATABASE_NAME:-LeafGoDB};User Id=${MSSQL_USER:-sa};Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;
+      # QUAN TRỌNG: Redis=redis:6379 (Luôn dùng cổng 6379 khi gọi nội bộ Docker)
+      # Không dùng biến ${REDIS_PORT} ở đây vì nó sẽ lấy số 6379 từ bên ngoài -> gây lỗi kết nối nội bộ
+      - ConnectionStrings__Redis=redis:6379,abortConnect=false,connectTimeout=30000,connectRetry=10,syncTimeout=15000
     depends_on:
       database:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - leafgo-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -76,6 +100,7 @@ services:
 
 volumes:
   sqlserver-data:
+  redis-data:
 
 networks:
   leafgo-network:
