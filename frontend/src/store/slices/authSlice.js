@@ -18,7 +18,8 @@ export const login = createAsyncThunk(
   async (credentials, { rejectWithValue }) => {
     try {
       // Support multiple formats: { phone, password } or { phoneOrEmail, password }
-      const phoneOrEmail = credentials.phoneOrEmail || credentials.phone || credentials.email;
+      const phoneOrEmail =
+        credentials.phoneOrEmail || credentials.phone || credentials.email;
       const password = credentials.password;
 
       if (!phoneOrEmail || !password) {
@@ -35,7 +36,7 @@ export const login = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Đăng nhập thất bại");
     }
-  }
+  },
 );
 
 // FR-01: Register
@@ -52,7 +53,7 @@ export const register = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Đăng ký thất bại");
     }
-  }
+  },
 );
 
 // Sửa sendResetPasswordOTP thunk
@@ -65,7 +66,7 @@ export const sendResetPasswordOTP = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // Sửa resetPasswordWithOTP thunk - nhận object thay vì 3 params riêng
@@ -76,32 +77,35 @@ export const resetPasswordWithOTP = createAsyncThunk(
       const response = await authService.resetPasswordWithOTP(
         email,
         token,
-        newPassword
+        newPassword,
       );
       return response;
     } catch (error) {
       return rejectWithValue(error.message);
     }
-  }
+  },
 );
 
 // FR-02: Change password
 export const changePassword = createAsyncThunk(
   "auth/changePassword",
-  async ({ userId, oldPassword, currentPassword, newPassword }, { rejectWithValue }) => {
+  async (
+    { userId, oldPassword, currentPassword, newPassword },
+    { rejectWithValue },
+  ) => {
     try {
       // Support both 'oldPassword' and 'currentPassword' parameter names
       const current = currentPassword || oldPassword;
       const response = await authService.changePassword(
         userId,
         current,
-        newPassword
+        newPassword,
       );
       return response;
     } catch (error) {
       return rejectWithValue(error.message || "Đổi mật khẩu thất bại");
     }
-  }
+  },
 );
 
 // FR-54, FR-04: Update profile
@@ -115,7 +119,7 @@ export const updateProfile = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(error.message || "Cập nhật thông tin thất bại");
     }
-  }
+  },
 );
 
 // Get user profile from backend
@@ -127,9 +131,11 @@ export const getUserProfile = createAsyncThunk(
       localStorage.setItem("user", JSON.stringify(user));
       return user;
     } catch (error) {
-      return rejectWithValue(error.message || "Lấy thông tin người dùng thất bại");
+      return rejectWithValue(
+        error.message || "Lấy thông tin người dùng thất bại",
+      );
     }
-  }
+  },
 );
 
 const authSlice = createSlice({
@@ -167,6 +173,14 @@ const authSlice = createSlice({
       state.user = action.payload;
       if (action.payload) {
         localStorage.setItem("user", JSON.stringify(action.payload));
+      }
+    },
+
+    // Update avatar only (synchronous, no API call)
+    updateAvatar: (state, action) => {
+      if (state.user) {
+        state.user.avatar = action.payload;
+        localStorage.setItem("user", JSON.stringify(state.user));
       }
     },
   },
@@ -281,5 +295,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, restoreSession, clearError, setUser } = authSlice.actions;
+export const { logout, restoreSession, clearError, setUser, updateAvatar } =
+  authSlice.actions;
 export default authSlice.reducer;

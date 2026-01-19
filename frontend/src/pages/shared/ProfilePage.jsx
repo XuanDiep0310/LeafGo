@@ -15,9 +15,21 @@ import {
   Spin,
 } from "antd";
 import { User, Lock, Save, Upload as UploadIcon, Car } from "lucide-react";
-import { updateProfile, changePassword } from "../../store/slices/authSlice";
-import { getUserProfile, updateUserProfile, uploadAvatar } from "../../services/userService";
-import { getVehicleTypes, getDriverVehicle, updateDriverVehicle } from "../../services/driverService";
+import {
+  updateProfile,
+  changePassword,
+  setUser,
+} from "../../store/slices/authSlice";
+import {
+  getUserProfile,
+  updateUserProfile,
+  uploadAvatar,
+} from "../../services/userService";
+import {
+  getVehicleTypes,
+  getDriverVehicle,
+  updateDriverVehicle,
+} from "../../services/driverService";
 import { changePassword as apiChangePassword } from "../../services/apiClient";
 
 function ProfilePageContent() {
@@ -54,7 +66,12 @@ function ProfilePageContent() {
         phoneNumber: userData.phoneNumber,
       });
       if (userData.avatar) {
-        setAvatar(userData.avatar);
+        // Convert relative path to full URL
+        let avatarUrl = userData.avatar;
+        if (avatarUrl.startsWith("/")) {
+          avatarUrl = `http://localhost:8080${avatarUrl}`;
+        }
+        setAvatar(avatarUrl);
       }
     } catch (error) {
       console.error("Error loading profile:", error);
@@ -108,7 +125,7 @@ function ProfilePageContent() {
         updateProfile({
           userId: user.id,
           profileData: values,
-        })
+        }),
       ).unwrap();
 
       message.success("Cập nhật thông tin thành công");
@@ -149,7 +166,9 @@ function ProfilePageContent() {
       setPasswordModalVisible(false);
       passwordForm.resetFields();
     } catch (error) {
-      message.error(error.response?.data?.error || error.message || "Đổi mật khẩu thất bại");
+      message.error(
+        error.response?.data?.error || error.message || "Đổi mật khẩu thất bại",
+      );
     }
   };
 
@@ -157,19 +176,21 @@ function ProfilePageContent() {
     try {
       setUploading(true);
       const response = await uploadAvatar(file);
-      const avatarUrl = response?.data?.avatarUrl || response?.data || response;
+      // Extract avatarUrl from nested response structure
+      let avatarUrl = response?.data?.avatarUrl || response?.avatarUrl;
 
       if (avatarUrl) {
+        // Convert relative path to full URL
+        if (avatarUrl.startsWith("/")) {
+          avatarUrl = `http://localhost:8080${avatarUrl}`;
+        }
         setAvatar(avatarUrl);
-        message.success("Cập nhật ảnh đại diện thành công");
 
-        // Update Redux store
-        dispatch(
-          updateProfile({
-            userId: user.id,
-            profileData: { avatar: avatarUrl },
-          })
-        );
+        // Update Redux store with full user object
+        const updatedUser = { ...user, avatar: avatarUrl };
+        dispatch(setUser(updatedUser));
+
+        message.success("Cập nhật ảnh đại diện thành công");
       }
     } catch (error) {
       message.error("Không thể tải ảnh lên");
@@ -222,9 +243,7 @@ function ProfilePageContent() {
           <Form.Item
             label="Số điện thoại"
             name="phoneNumber"
-            rules={[
-              { required: true, message: "Vui lòng nhập số điện thoại" },
-            ]}
+            rules={[{ required: true, message: "Vui lòng nhập số điện thoại" }]}
           >
             <Input />
           </Form.Item>
@@ -244,85 +263,87 @@ function ProfilePageContent() {
     },
     ...(user?.role === "driver"
       ? [
-        {
-          label: (
-            <span className="flex items-center gap-2">
-              <Car className="w-4 h-4" />
-              Thông tin xe
-            </span>
-          ),
-          key: "vehicle",
-          children: loadingVehicle ? (
-            <div className="flex justify-center py-8">
-              <Spin />
-            </div>
-          ) : (
-            <Form
-              form={vehicleForm}
-              layout="vertical"
-              onFinish={handleUpdateVehicle}
-              size="large"
-            >
-              <Form.Item
-                label="Loại xe"
-                name="vehicleTypeId"
-                rules={[{ required: true, message: "Vui lòng chọn loại xe" }]}
+          {
+            label: (
+              <span className="flex items-center gap-2">
+                <Car className="w-4 h-4" />
+                Thông tin xe
+              </span>
+            ),
+            key: "vehicle",
+            children: loadingVehicle ? (
+              <div className="flex justify-center py-8">
+                <Spin />
+              </div>
+            ) : (
+              <Form
+                form={vehicleForm}
+                layout="vertical"
+                onFinish={handleUpdateVehicle}
+                size="large"
               >
-                <Select
-                  placeholder="Chọn loại xe"
-                  options={vehicleTypes.map((vt) => ({
-                    label: vt.name,
-                    value: vt.id,
-                  }))}
-                />
-              </Form.Item>
-
-              <Form.Item
-                label="Biển số xe"
-                name="licensePlate"
-                rules={[{ required: true, message: "Vui lòng nhập biển số xe" }]}
-              >
-                <Input placeholder="VD: 29A-12345" />
-              </Form.Item>
-
-              <Form.Item
-                label="Hãng xe"
-                name="vehicleBrand"
-                rules={[{ required: true, message: "Vui lòng nhập hãng xe" }]}
-              >
-                <Input placeholder="VD: Honda, Yamaha" />
-              </Form.Item>
-
-              <Form.Item
-                label="Mẫu xe"
-                name="vehicleModel"
-                rules={[{ required: true, message: "Vui lòng nhập mẫu xe" }]}
-              >
-                <Input placeholder="VD: Wave, Exciter" />
-              </Form.Item>
-
-              <Form.Item
-                label="Màu xe"
-                name="vehicleColor"
-                rules={[{ required: true, message: "Vui lòng nhập màu xe" }]}
-              >
-                <Input placeholder="VD: Đỏ, Xanh" />
-              </Form.Item>
-
-              <Form.Item>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loadingVehicle}
-                  icon={<Save className="w-4 h-4" />}
+                <Form.Item
+                  label="Loại xe"
+                  name="vehicleTypeId"
+                  rules={[{ required: true, message: "Vui lòng chọn loại xe" }]}
                 >
-                  Lưu thay đổi
-                </Button>
-              </Form.Item>
-            </Form>
-          ),
-        },
-      ]
+                  <Select
+                    placeholder="Chọn loại xe"
+                    options={vehicleTypes.map((vt) => ({
+                      label: vt.name,
+                      value: vt.id,
+                    }))}
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  label="Biển số xe"
+                  name="licensePlate"
+                  rules={[
+                    { required: true, message: "Vui lòng nhập biển số xe" },
+                  ]}
+                >
+                  <Input placeholder="VD: 29A-12345" />
+                </Form.Item>
+
+                <Form.Item
+                  label="Hãng xe"
+                  name="vehicleBrand"
+                  rules={[{ required: true, message: "Vui lòng nhập hãng xe" }]}
+                >
+                  <Input placeholder="VD: Honda, Yamaha" />
+                </Form.Item>
+
+                <Form.Item
+                  label="Mẫu xe"
+                  name="vehicleModel"
+                  rules={[{ required: true, message: "Vui lòng nhập mẫu xe" }]}
+                >
+                  <Input placeholder="VD: Wave, Exciter" />
+                </Form.Item>
+
+                <Form.Item
+                  label="Màu xe"
+                  name="vehicleColor"
+                  rules={[{ required: true, message: "Vui lòng nhập màu xe" }]}
+                >
+                  <Input placeholder="VD: Đỏ, Xanh" />
+                </Form.Item>
+
+                <Form.Item>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={loadingVehicle}
+                    icon={<Save className="w-4 h-4" />}
+                  >
+                    Lưu thay đổi
+                  </Button>
+                </Form.Item>
+              </Form>
+            ),
+          },
+        ]
       : []),
     {
       label: (
