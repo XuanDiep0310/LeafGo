@@ -11,11 +11,19 @@ namespace LeafGo.Infrastructure.Services
     public class DriverService : IDriverService
     {
         private readonly LeafGoDbContext _context;
+        private readonly INotificationService _notificationService;
+        private readonly ICacheService _cacheService;
         private readonly ILogger<DriverService> _logger;
 
-        public DriverService(LeafGoDbContext context, ILogger<DriverService> logger)
+        public DriverService(
+            LeafGoDbContext context,
+            INotificationService notificationService,
+            ICacheService cacheService,
+            ILogger<DriverService> logger)
         {
             _context = context;
+            _notificationService = notificationService;
+            _cacheService = cacheService;
             _logger = logger;
         }
 
@@ -45,6 +53,16 @@ namespace LeafGo.Infrastructure.Services
             driver.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            // Update cache
+            if (isOnline)
+            {
+                await _cacheService.SetDriverOnlineAsync(driverId);
+            }
+            else
+            {
+                await _cacheService.SetDriverOfflineAsync(driverId);
+            }
 
             return new ToggleOnlineResponse
             {
@@ -90,6 +108,9 @@ namespace LeafGo.Infrastructure.Services
 
             _logger.LogInformation("Driver {DriverId} location updated to ({Lat}, {Lng})",
                 driverId, request.Latitude, request.Longitude);
+
+            // Update Redis cache for geospatial queries
+            await _cacheService.UpdateDriverLocationAsync(driverId, request.Latitude, request.Longitude);
         }
 
         public async Task<List<PendingRideResponse>> GetPendingRidesAsync(
@@ -219,6 +240,20 @@ namespace LeafGo.Infrastructure.Services
 
             _logger.LogInformation("Driver {DriverId} accepted ride {RideId}", driverId, request.RideId);
 
+            // Update cache
+            await _cacheService.RemovePendingRideAsync(request.RideId);
+
+            // Notify user via SignalR
+            var driverInfo = new
+            {
+                Id = driver.Id,
+                FullName = driver.FullName,
+                PhoneNumber = driver.PhoneNumber,
+                Avatar = driver.Avatar
+            };
+
+            await _notificationService.NotifyRideAcceptedAsync(request.RideId, ride.UserId, driverInfo);
+
             return new AcceptRideResponse
             {
                 RideId = ride.Id,
@@ -275,6 +310,16 @@ namespace LeafGo.Infrastructure.Services
 
             _logger.LogInformation("Ride {RideId} status updated to {Status} by driver {DriverId}",
                 request.RideId, request.Status, driverId);
+
+            // Notify via SignalR
+            await _notificationService.NotifyRideStatusChangedAsync(request.RideId, request.Status);
+
+            // If completed, remove active ride cache
+            if (request.Status == RideStatus.Completed)
+            {
+                await _cacheService.RemoveActiveRideAsync(ride.UserId);
+                await _notificationService.NotifyRideCompletedAsync(request.RideId);
+            }
         }
 
         public async Task<CurrentRideResponse?> GetCurrentRideAsync(Guid driverId)
