@@ -8,20 +8,19 @@ import {
   Input,
   Button,
   Tabs,
-  message,
   Modal,
   Select,
   Upload,
+  App,
 } from "antd";
 import { User, Lock, Save, Upload as UploadIcon, Car } from "lucide-react";
 import { updateProfile, changePassword } from "../../store/slices/authSlice";
 
-const { TabPane } = Tabs;
-
 // Implements FR-54, FR-04, FR-02
-export default function ProfilePage() {
+function ProfilePageContent() {
   const dispatch = useDispatch();
   const { user, loading } = useSelector((state) => state.auth);
+  const { message } = App.useApp();
   const [profileForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
@@ -60,6 +59,150 @@ export default function ProfilePage() {
       message.error(error);
     }
   };
+
+  // Build tabs items
+  const tabItems = [
+    {
+      label: (
+        <span className="flex items-center gap-2">
+          <User className="w-4 h-4" />
+          Thông tin
+        </span>
+      ),
+      key: "info",
+      children: (
+        <Form
+          form={profileForm}
+          layout="vertical"
+          onFinish={handleUpdateProfile}
+          initialValues={user}
+          size="large"
+        >
+          <Form.Item
+            label="Họ và tên"
+            name="fullName"
+            rules={[{ required: true, message: "Vui lòng nhập họ tên" }]}
+          >
+            <Input />
+          </Form.Item>
+
+          <Form.Item
+            label="Email"
+            name="email"
+            rules={[
+              { required: true, message: "Vui lòng nhập email" },
+              { type: "email", message: "Email không hợp lệ" },
+            ]}
+          >
+            <Input />
+          </Form.Item>
+
+          <Form.Item
+            label="Số điện thoại"
+            name="phone"
+            rules={[
+              { required: true, message: "Vui lòng nhập số điện thoại" },
+            ]}
+          >
+            <Input />
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={loading}
+              icon={<Save className="w-4 h-4" />}
+            >
+              Lưu thay đổi
+            </Button>
+          </Form.Item>
+        </Form>
+      ),
+    },
+    ...(user?.role === "driver" && user?.vehicleInfo
+      ? [
+        {
+          label: (
+            <span className="flex items-center gap-2">
+              <Car className="w-4 h-4" />
+              Thông tin xe
+            </span>
+          ),
+          key: "vehicle",
+          children: (
+            <Form
+              form={profileForm}
+              layout="vertical"
+              onFinish={handleUpdateProfile}
+              initialValues={user}
+              size="large"
+            >
+              <Form.Item
+                label="Biển số xe"
+                name={["vehicleInfo", "licensePlate"]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                label="Loại xe"
+                name={["vehicleInfo", "vehicleType"]}
+              >
+                <Select
+                  placeholder="Chọn loại xe"
+                  options={vehicleTypes.map((vt) => ({
+                    label: vt.name,
+                    value: vt.id,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item label="Hãng xe" name={["vehicleInfo", "brand"]}>
+                <Input />
+              </Form.Item>
+              <Form.Item label="Màu xe" name={["vehicleInfo", "color"]}>
+                <Input />
+              </Form.Item>
+
+              <Form.Item>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={loading}
+                  icon={<Save className="w-4 h-4" />}
+                >
+                  Lưu thay đổi
+                </Button>
+              </Form.Item>
+            </Form>
+          ),
+        },
+      ]
+      : []),
+    {
+      label: (
+        <span className="flex items-center gap-2">
+          <Lock className="w-4 h-4" />
+          Bảo mật
+        </span>
+      ),
+      key: "security",
+      children: (
+        <div className="py-4">
+          <h4 className="font-semibold text-foreground mb-2">Mật khẩu</h4>
+          <p className="text-sm text-muted-foreground mb-4">
+            Đổi mật khẩu để bảo vệ tài khoản của bạn
+          </p>
+          <Button
+            type="primary"
+            onClick={() => setPasswordModalVisible(true)}
+            icon={<Lock className="w-4 h-4" />}
+          >
+            Đổi mật khẩu
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -105,145 +248,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <Tabs defaultActiveKey="info">
-          <TabPane
-            tab={
-              <span className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Thông tin
-              </span>
-            }
-            key="info"
-          >
-            <Form
-              form={profileForm}
-              layout="vertical"
-              onFinish={handleUpdateProfile}
-              initialValues={user}
-              size="large"
-            >
-              <Form.Item
-                label="Họ và tên"
-                name="fullName"
-                rules={[{ required: true, message: "Vui lòng nhập họ tên" }]}
-              >
-                <Input />
-              </Form.Item>
-
-              <Form.Item
-                label="Email"
-                name="email"
-                rules={[
-                  { required: true, message: "Vui lòng nhập email" },
-                  { type: "email", message: "Email không hợp lệ" },
-                ]}
-              >
-                <Input />
-              </Form.Item>
-
-              <Form.Item
-                label="Số điện thoại"
-                name="phone"
-                rules={[
-                  { required: true, message: "Vui lòng nhập số điện thoại" },
-                ]}
-              >
-                <Input />
-              </Form.Item>
-
-              <Form.Item>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  icon={<Save className="w-4 h-4" />}
-                >
-                  Lưu thay đổi
-                </Button>
-              </Form.Item>
-            </Form>
-          </TabPane>
-
-          {user?.role === "driver" && user?.vehicleInfo && (
-            <TabPane
-              tab={
-                <span className="flex items-center gap-2">
-                  <Car className="w-4 h-4" />
-                  Thông tin xe
-                </span>
-              }
-              key="vehicle"
-            >
-              <Form
-                form={profileForm}
-                layout="vertical"
-                onFinish={handleUpdateProfile}
-                initialValues={user}
-                size="large"
-              >
-                <Form.Item
-                  label="Biển số xe"
-                  name={["vehicleInfo", "licensePlate"]}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="Loại xe"
-                  name={["vehicleInfo", "vehicleType"]}
-                >
-                  <Select
-                    placeholder="Chọn loại xe"
-                    options={vehicleTypes.map((vt) => ({
-                      label: vt.name,
-                      value: vt.id,
-                    }))}
-                  />
-                </Form.Item>
-                <Form.Item label="Hãng xe" name={["vehicleInfo", "brand"]}>
-                  <Input />
-                </Form.Item>
-                <Form.Item label="Màu xe" name={["vehicleInfo", "color"]}>
-                  <Input />
-                </Form.Item>
-
-                <Form.Item>
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    loading={loading}
-                    icon={<Save className="w-4 h-4" />}
-                  >
-                    Lưu thay đổi
-                  </Button>
-                </Form.Item>
-              </Form>
-            </TabPane>
-          )}
-
-          <TabPane
-            tab={
-              <span className="flex items-center gap-2">
-                <Lock className="w-4 h-4" />
-                Bảo mật
-              </span>
-            }
-            key="security"
-          >
-            <div className="py-4">
-              <h4 className="font-semibold text-foreground mb-2">Mật khẩu</h4>
-              <p className="text-sm text-muted-foreground mb-4">
-                Đổi mật khẩu để bảo vệ tài khoản của bạn
-              </p>
-              <Button
-                type="primary"
-                onClick={() => setPasswordModalVisible(true)}
-                icon={<Lock className="w-4 h-4" />}
-              >
-                Đổi mật khẩu
-              </Button>
-            </div>
-          </TabPane>
-        </Tabs>
+        <Tabs defaultActiveKey="info" items={tabItems} />
       </Card>
 
       {/* FR-02: Change Password Modal */}
@@ -315,5 +320,13 @@ export default function ProfilePage() {
         </Form>
       </Modal>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <App>
+      <ProfilePageContent />
+    </App>
   );
 }

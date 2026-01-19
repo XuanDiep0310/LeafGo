@@ -118,7 +118,7 @@ export async function getRideHistory(params = {}) {
  * @returns {Promise} List of vehicle types with pricing
  */
 export async function getVehicleTypes() {
-    const res = await apiClient.get("/api/VehicleTypes");
+    const res = await apiClient.get("/api/Admin/vehicle-types");
     return res.data;
 }
 

@@ -1,7 +1,7 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import { Card, Empty, Tag, Pagination, Select, DatePicker, Button, Spin, message } from "antd";
+import { useEffect, useState } from "react"
+import { Card, Empty, Tag, Pagination, message, DatePicker, Select } from "antd"
 import {
   Calendar,
   MapPin,
@@ -10,231 +10,216 @@ import {
   Star,
   User,
   Phone,
-  Filter,
-  RefreshCw,
-} from "lucide-react";
-import { getRideHistory } from "../../services/driverService";
-import { format } from "date-fns";
-import { vi } from "date-fns/locale";
+} from "lucide-react"
+import { getRideHistory } from "../../services/driverService"
+import { format } from "date-fns"
+import { vi } from "date-fns/locale"
 
-const { RangePicker } = DatePicker;
-const { Option } = Select;
+const { RangePicker } = DatePicker
+const { Option } = Select
 
-// Status color mapping
-const STATUS_COLORS = {
-  Completed: "green",
-  Cancelled: "red",
-  InProgress: "blue",
-  Pending: "orange",
-};
-
-const STATUS_LABELS = {
-  Completed: "Hoàn thành",
-  Cancelled: "Đã hủy",
-  InProgress: "Đang thực hiện",
-  Pending: "Chờ xử lý",
-};
-
-// Driver history page
 export default function DriverHistoryPage() {
-  const [rides, setRides] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [trips, setTrips] = useState([])
+  const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState({
-    page: 1,
+    current: 1,
     pageSize: 10,
-    totalItems: 0,
-    totalPages: 0,
-  });
-
-  // Filters
+    total: 0,
+  })
   const [filters, setFilters] = useState({
-    status: undefined,
+    status: null,
     dateRange: null,
-  });
+  })
 
   useEffect(() => {
-    fetchHistory();
-  }, [pagination.page, pagination.pageSize, filters]);
+    fetchHistory()
+  }, [pagination.current, pagination.pageSize, filters])
 
   const fetchHistory = async () => {
-    setLoading(true);
     try {
+      setLoading(true)
       const params = {
-        Page: pagination.page,
+        Page: pagination.current,
         PageSize: pagination.pageSize,
-      };
+      }
 
-      // Add status filter
       if (filters.status) {
-        params.Status = filters.status;
+        params.Status = filters.status
       }
 
-      // Add date range filter
       if (filters.dateRange && filters.dateRange.length === 2) {
-        params.FromDate = filters.dateRange[0].toISOString();
-        params.ToDate = filters.dateRange[1].toISOString();
+        params.FromDate = filters.dateRange[0].toISOString()
+        params.ToDate = filters.dateRange[1].toISOString()
       }
 
-      const response = await getRideHistory(params);
+      const response = await getRideHistory(params)
 
-      if (response.success) {
-        setRides(response.data.items || []);
-        setPagination(prev => ({
-          ...prev,
-          totalItems: response.data.totalItems || 0,
-          totalPages: response.data.totalPages || 0,
-        }));
+      // Handle both direct data and wrapped response
+      const items = response.data?.items || response.items || []
+      if (!items || items.length === 0) {
+        setTrips([])
+        setPagination({
+          ...pagination,
+          total: 0,
+        })
+        return
       }
+
+      const mappedTrips = items.map((ride) => ({
+        id: ride.id,
+        createdAt: ride.requestTime || ride.createdAt,
+        userId: ride.customerId,
+        customerName: ride.customerName || "Khách hàng",
+        customerPhone: ride.customerPhone || "",
+        pickupLocation: {
+          address: ride.pickupAddress,
+          lat: ride.pickupLatitude,
+          lng: ride.pickupLongitude,
+        },
+        dropoffLocation: {
+          address: ride.dropoffAddress,
+          lat: ride.dropoffLatitude,
+          lng: ride.dropoffLongitude,
+        },
+        distance: ride.distance,
+        price: ride.finalPrice || ride.estimatedPrice,
+        status: ride.status,
+        rating: ride.rating,
+        comment: ride.comment,
+      }))
+
+      setTrips(mappedTrips)
+      const totalCount = response.data?.totalCount || response.totalCount || 0
+      setPagination({
+        ...pagination,
+        total: totalCount,
+      })
     } catch (error) {
-      console.error("Error fetching history:", error);
-      message.error("Không thể tải lịch sử chuyến xe");
+      console.error("Error fetching history:", error)
+      message.error("Không thể tải lịch sử chuyến đi")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handlePageChange = (page, pageSize) => {
-    setPagination(prev => ({ ...prev, page, pageSize }));
-  };
+    setPagination({
+      ...pagination,
+      current: page,
+      pageSize: pageSize,
+    })
+  }
 
   const handleStatusChange = (value) => {
-    setFilters(prev => ({ ...prev, status: value }));
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
-  };
+    setFilters({
+      ...filters,
+      status: value,
+    })
+    setPagination({
+      ...pagination,
+      current: 1,
+    })
+  }
 
   const handleDateRangeChange = (dates) => {
-    setFilters(prev => ({ ...prev, dateRange: dates }));
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
-  };
-
-  const handleResetFilters = () => {
     setFilters({
-      status: undefined,
-      dateRange: null,
-    });
-    setPagination(prev => ({ ...prev, page: 1 }));
-  };
+      ...filters,
+      dateRange: dates,
+    })
+    setPagination({
+      ...pagination,
+      current: 1,
+    })
+  }
 
-  if (loading && rides.length === 0) {
+  if (loading && trips.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Spin size="large" tip="Đang tải lịch sử..." />
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground">Đang tải...</p>
+        </div>
       </div>
-    );
+    )
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-foreground">
-          Lịch sử chuyến xe
-        </h2>
-        <Button
-          icon={<RefreshCw className="w-4 h-4" />}
-          onClick={fetchHistory}
-          loading={loading}
-        >
-          Làm mới
-        </Button>
-      </div>
+      <h2 className="text-2xl font-bold text-foreground mb-6">
+        Lịch sử chuyến xe
+      </h2>
 
-      {/* Filters */}
       <Card className="mb-6">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Lọc:</span>
-          </div>
-
+        <div className="flex flex-wrap gap-4">
           <Select
-            placeholder="Trạng thái"
-            style={{ width: 150 }}
-            value={filters.status}
-            onChange={handleStatusChange}
+            placeholder="Lọc theo trạng thái"
             allowClear
+            style={{ width: 200 }}
+            onChange={handleStatusChange}
+            value={filters.status}
           >
             <Option value="Completed">Hoàn thành</Option>
             <Option value="Cancelled">Đã hủy</Option>
-            <Option value="InProgress">Đang thực hiện</Option>
-            <Option value="Pending">Chờ xử lý</Option>
           </Select>
 
           <RangePicker
-            placeholder={["Từ ngày", "Đến ngày"]}
-            value={filters.dateRange}
-            onChange={handleDateRangeChange}
             format="DD/MM/YYYY"
-            locale={vi}
+            placeholder={["Từ ngày", "Đến ngày"]}
+            onChange={handleDateRangeChange}
+            value={filters.dateRange}
           />
-
-          {(filters.status || filters.dateRange) && (
-            <Button onClick={handleResetFilters} type="link">
-              Xóa bộ lọc
-            </Button>
-          )}
         </div>
       </Card>
 
-      {/* Results summary */}
-      <div className="mb-4 text-sm text-muted-foreground">
-        Tổng số: <span className="font-semibold">{pagination.totalItems}</span> chuyến xe
-      </div>
-
-      {/* Rides list */}
-      {rides.length === 0 ? (
+      {trips.length === 0 ? (
         <Card>
           <Empty description="Chưa có chuyến đi nào" />
         </Card>
       ) : (
         <>
           <div className="space-y-4 mb-6">
-            {rides.map((ride) => (
-              <Card key={ride.id} className="hover:shadow-md transition-shadow">
+            {trips.map((trip) => (
+              <Card key={trip.id} className="hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                      {format(new Date(ride.requestedAt), "dd/MM/yyyy HH:mm", {
+                      {format(new Date(trip.createdAt), "dd/MM/yyyy HH:mm", {
                         locale: vi,
                       })}
                     </span>
-                    {ride.completedAt && (
-                      <span className="text-xs text-muted-foreground">
-                        → {format(new Date(ride.completedAt), "HH:mm", { locale: vi })}
-                      </span>
-                    )}
                   </div>
-                  <Tag color={STATUS_COLORS[ride.status] || "default"}>
-                    {STATUS_LABELS[ride.status] || ride.status}
+                  <Tag color={trip.status === "Completed" ? "green" : "red"}>
+                    {trip.status === "Completed" ? "Hoàn thành" : "Đã hủy"}
                   </Tag>
                 </div>
 
-                {/* Customer info */}
-                {ride.user && (
+                {trip.userId && (
                   <div className="mb-4 p-3 bg-accent rounded-lg">
                     <div className="flex items-center gap-2 mb-1">
                       <User className="w-4 h-4 text-muted-foreground" />
                       <span className="text-sm font-medium text-foreground">
-                        Khách hàng: {ride.user.fullName}
+                        Khách hàng: {trip.customerName}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">
-                        {ride.user.phoneNumber}
-                      </span>
-                    </div>
+                    {trip.customerPhone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {trip.customerPhone}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {/* Locations */}
                 <div className="space-y-3 mb-4">
                   <div className="flex items-start gap-2">
                     <MapPin className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-xs text-muted-foreground">Điểm đón</p>
                       <p className="text-sm text-foreground font-medium">
-                        {ride.pickupAddress}
+                        {trip.pickupLocation.address}
                       </p>
                     </div>
                   </div>
@@ -243,55 +228,48 @@ export default function DriverHistoryPage() {
                     <div>
                       <p className="text-xs text-muted-foreground">Điểm đến</p>
                       <p className="text-sm text-foreground font-medium">
-                        {ride.destinationAddress}
+                        {trip.dropoffLocation.address}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Price and rating */}
                 <div className="flex justify-between items-center pt-4 border-t border-border">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1">
                       <DollarSign className="w-4 h-4 text-primary" />
                       <span className="font-semibold text-primary">
-                        {(ride.finalPrice || 0).toLocaleString()}đ
+                        {trip.price.toLocaleString()}đ
                       </span>
                     </div>
-                    {ride.distance > 0 && (
-                      <span className="text-sm text-muted-foreground">
-                        {ride.distance.toFixed(1)} km
-                      </span>
-                    )}
+                    <span className="text-sm text-muted-foreground">
+                      {trip.distance} km
+                    </span>
                   </div>
-                  {ride.rating && (
+                  {trip.rating && (
                     <div className="flex items-center gap-2">
                       <div className="flex gap-1">
                         {[...Array(5)].map((_, i) => (
                           <Star
                             key={i}
-                            className={`w-4 h-4 ${i < ride.rating.rating
-                                ? "text-yellow-400 fill-yellow-400"
-                                : "text-gray-300"
+                            className={`w-4 h-4 ${i < trip.rating
+                              ? "text-yellow-400 fill-yellow-400"
+                              : "text-gray-300"
                               }`}
                           />
                         ))}
                       </div>
-                      <span className="text-sm text-muted-foreground">
-                        {ride.rating.rating}/5
-                      </span>
                     </div>
                   )}
                 </div>
 
-                {/* Customer comment */}
-                {ride.rating?.comment && (
+                {trip.comment && (
                   <div className="mt-4 p-3 bg-secondary/50 rounded-lg border-l-2 border-primary">
                     <p className="text-xs font-semibold text-muted-foreground mb-1">
                       Nhận xét từ khách:
                     </p>
                     <p className="text-sm text-foreground italic">
-                      "{ride.rating.comment}"
+                      "{trip.comment}"
                     </p>
                   </div>
                 )}
@@ -299,22 +277,19 @@ export default function DriverHistoryPage() {
             ))}
           </div>
 
-          {/* Pagination */}
-          {pagination.totalPages > 1 && (
-            <div className="flex justify-center">
-              <Pagination
-                current={pagination.page}
-                pageSize={pagination.pageSize}
-                total={pagination.totalItems}
-                onChange={handlePageChange}
-                showSizeChanger
-                showTotal={(total) => `Tổng số ${total} chuyến`}
-                pageSizeOptions={[10, 20, 50]}
-              />
-            </div>
-          )}
+          <div className="flex justify-center">
+            <Pagination
+              current={pagination.current}
+              pageSize={pagination.pageSize}
+              total={pagination.total}
+              onChange={handlePageChange}
+              showSizeChanger
+              showTotal={(total) => `Tổng ${total} chuyến`}
+              pageSizeOptions={["10", "20", "50"]}
+            />
+          </div>
         </>
       )}
     </div>
-  );
+  )
 }

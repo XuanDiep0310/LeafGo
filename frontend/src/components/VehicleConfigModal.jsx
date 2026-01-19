@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Modal, Form, Input, Select, Button, message, Spin, Empty } from "antd";
+import { Modal, Form, Input, Select, Button, message, Spin, Empty, Alert } from "antd";
 import { Car, AlertCircle, RefreshCw } from "lucide-react";
 import { getDriverVehicle, updateDriverVehicle, getVehicleTypes } from "../services/driverService";
 
@@ -12,6 +12,7 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
     const [vehicleTypes, setVehicleTypes] = useState([]);
     const [existingVehicle, setExistingVehicle] = useState(null);
     const [selectedType, setSelectedType] = useState(null);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         if (open) {
@@ -21,36 +22,90 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
 
     const fetchData = async () => {
         setFetching(true);
+        setError(null);
+
         try {
+            console.log("🔍 Fetching vehicle types...");
+
             const [typesRes, vehicleRes] = await Promise.allSettled([
                 getVehicleTypes(),
                 getDriverVehicle(),
             ]);
 
+            // Debug: Log raw responses
+            console.log("📦 Vehicle Types Response:", typesRes);
+            console.log("📦 Current Vehicle Response:", vehicleRes);
+
             // Handle vehicle types
-            if (typesRes.status === "fulfilled" && typesRes.value?.success) {
-                const types = typesRes.value.data || [];
+            if (typesRes.status === "fulfilled") {
+                const typesData = typesRes.value;
+                console.log("✅ Vehicle Types Data:", typesData);
+
+                // Check multiple response formats
+                let types = [];
+
+                // Format: { success: true, data: [...] } - ApiResponse wrapper
+                if (typesData?.success && typesData?.data) {
+                    types = typesData.data;
+                    console.log("Format 1: ApiResponse with success + data");
+                }
+                // Format: { data: [...] } - Direct data object
+                else if (Array.isArray(typesData?.data)) {
+                    types = typesData.data;
+                    console.log("Format 2: direct data array");
+                }
+                // Format: [...] - Direct array
+                else if (Array.isArray(typesData)) {
+                    types = typesData;
+                    console.log("Format 3: direct array");
+                } else {
+                    console.error("❌ Unknown format:", typesData);
+                    setError("Định dạng dữ liệu không hợp lệ");
+                }
+
+                // Filter active types
                 const activeTypes = types.filter(vt => vt.isActive !== false);
+                console.log(`✅ Active Vehicle Types (${activeTypes.length}):`, activeTypes);
+
                 setVehicleTypes(activeTypes);
+
+                if (activeTypes.length === 0) {
+                    setError("Không có loại xe nào. Vui lòng liên hệ Admin để thêm loại xe.");
+                    message.warning("Không có loại xe khả dụng");
+                }
+            } else {
+                console.error("❌ Failed to fetch vehicle types:", typesRes.reason);
+                setError(typesRes.reason?.message || "Không thể tải danh sách loại xe");
+                message.error("Không thể tải danh sách loại xe");
             }
 
             // Handle existing vehicle
-            if (vehicleRes.status === "fulfilled" && vehicleRes.value?.success) {
-                const vehicle = vehicleRes.value.data;
-                setExistingVehicle(vehicle);
+            if (vehicleRes.status === "fulfilled") {
+                const vehicleData = vehicleRes.value;
+                console.log("✅ Current Vehicle Data:", vehicleData);
 
-                form.setFieldsValue({
-                    vehicleTypeId: vehicle.vehicleType?.id,
-                    licensePlate: vehicle.licensePlate,
-                    vehicleBrand: vehicle.vehicleBrand,
-                    vehicleModel: vehicle.vehicleModel,
-                    vehicleColor: vehicle.vehicleColor,
-                });
+                if (vehicleData?.success && vehicleData?.data) {
+                    const vehicle = vehicleData.data;
+                    setExistingVehicle(vehicle);
 
-                setSelectedType(vehicle.vehicleType);
+                    form.setFieldsValue({
+                        vehicleTypeId: vehicle.vehicleType?.id,
+                        licensePlate: vehicle.licensePlate,
+                        vehicleBrand: vehicle.vehicleBrand,
+                        vehicleModel: vehicle.vehicleModel,
+                        vehicleColor: vehicle.vehicleColor,
+                    });
+
+                    setSelectedType(vehicle.vehicleType);
+                } else {
+                    console.log("ℹ️ No vehicle registered yet");
+                }
+            } else {
+                console.error("⚠️ Failed to fetch vehicle:", vehicleRes.reason);
             }
         } catch (error) {
-            console.error("Error fetching data:", error);
+            console.error("❌ Error fetching data:", error);
+            setError(error.message || "Không thể tải dữ liệu");
             message.error("Không thể tải dữ liệu");
         } finally {
             setFetching(false);
@@ -59,13 +114,17 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
 
     const handleTypeChange = (typeId) => {
         const type = vehicleTypes.find(vt => vt.id === typeId);
+        console.log("Selected vehicle type:", type);
         setSelectedType(type);
     };
 
     const handleSubmit = async (values) => {
         setLoading(true);
+        console.log("📤 Submitting vehicle data:", values);
+
         try {
             const response = await updateDriverVehicle(values);
+            console.log("✅ Update response:", response);
 
             if (response.success) {
                 message.success(
@@ -73,9 +132,11 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                 );
                 onSuccess?.(response.data);
                 onClose();
+            } else {
+                message.error(response.message || "Có lỗi xảy ra");
             }
         } catch (error) {
-            console.error("Update vehicle error:", error);
+            console.error("❌ Update vehicle error:", error);
             const errorMsg = error.response?.data?.error || "Không thể cập nhật thông tin xe";
             message.error(errorMsg);
         } finally {
@@ -87,6 +148,7 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
         if (!loading) {
             form.resetFields();
             setSelectedType(null);
+            setError(null);
             onClose();
         }
     };
@@ -104,7 +166,6 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
             footer={null}
             width={600}
             maskClosable={false}
-            destroyOnClose
         >
             <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
@@ -112,6 +173,24 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                     Vui lòng cập nhật đầy đủ thông tin xe trước khi bắt đầu nhận chuyến.
                 </p>
             </div>
+
+            {/* Error Alert */}
+            {error && (
+                <Alert
+                    message="Lỗi"
+                    description={error}
+                    type="error"
+                    showIcon
+                    closable
+                    onClose={() => setError(null)}
+                    className="mb-4"
+                    action={
+                        <Button size="small" onClick={fetchData}>
+                            Thử lại
+                        </Button>
+                    }
+                />
+            )}
 
             {fetching ? (
                 <div className="py-8 text-center">
@@ -132,7 +211,21 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                             notFoundContent={
                                 <Empty
                                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                    description="Không có loại xe"
+                                    description={
+                                        <div className="text-center py-4">
+                                            <p className="text-gray-600 mb-2">Không có loại xe</p>
+                                            <p className="text-xs text-gray-500 mb-3">
+                                                Vui lòng liên hệ Admin để thêm loại xe
+                                            </p>
+                                            <Button
+                                                size="small"
+                                                icon={<RefreshCw className="w-4 h-4" />}
+                                                onClick={fetchData}
+                                            >
+                                                Thử lại
+                                            </Button>
+                                        </div>
+                                    }
                                 />
                             }
                         >
@@ -156,6 +249,22 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                                 <span className="mx-2">•</span>
                                 <span>Giá/km: </span>
                                 <span className="font-bold">{selectedType.pricePerKm?.toLocaleString()}đ</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Debug Info - Remove after fixing */}
+                    {!fetching && vehicleTypes.length === 0 && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-sm font-semibold text-red-800 mb-2">
+                                🐛 Debug Info
+                            </p>
+                            <div className="text-xs text-red-700 space-y-1">
+                                <p>• Kiểm tra Console để xem log chi tiết</p>
+                                <p>• API endpoint: <code className="bg-red-100 px-1 rounded">/api/Admin/vehicle-types</code></p>
+                                <p>• Service function: <code className="bg-red-100 px-1 rounded">getVehicleTypes()</code></p>
+                                <p>• Đảm bảo Admin đã tạo ít nhất 1 loại xe</p>
+                                <p>• Kiểm tra xem loại xe có được kích hoạt (isActive = true) không</p>
                             </div>
                         </div>
                     )}
@@ -246,6 +355,7 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                                 htmlType="submit"
                                 loading={loading}
                                 size="large"
+                                disabled={vehicleTypes.length === 0}
                             >
                                 {existingVehicle ? "Cập nhật" : "Lưu"}
                             </Button>
