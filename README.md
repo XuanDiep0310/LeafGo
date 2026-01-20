@@ -100,8 +100,11 @@ dotnet run --project LeafGo.API
 * [x] Backend Scaffolding (Clean Architecture)
 * [x] Database Implementation (EF Core)
 * [x] Authentication (JWT & Identity)
-* [ ] Real-time Communication (SignalR)
-* [ ] Payment Gateway Integration
+* [x] User Features
+* [x] Driver Features
+* [x] Admin Features
+* [x] Real-time Communication (SignalR)
+* [X] Redis Integration
 
 ## 👥 Contributors
 
