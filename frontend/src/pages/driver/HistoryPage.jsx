@@ -70,7 +70,6 @@ export default function DriverHistoryPage() {
         const dateStr = ride.requestTime || ride.createdAt || new Date().toISOString()
         const parsedDate = new Date(dateStr)
         const validDate = isNaN(parsedDate.getTime()) ? new Date() : parsedDate
-        console.log(ride)
         return {
           id: ride.id,
           createdAt: validDate,
@@ -90,8 +89,8 @@ export default function DriverHistoryPage() {
           distance: ride.distance || 0,
           price: ride.finalPrice || ride.estimatedPrice || 0,
           status: ride.status,
-          rating: ride.rating.rating,
-          comment: ride.rating.comment,
+          rating: ride.rating?.rating || 0,
+          comment: ride.rating?.comment || "",
         }
       })
 

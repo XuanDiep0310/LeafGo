@@ -10,7 +10,7 @@ import {
   Polyline,
   useMap,
 } from "react-leaflet";
-import { AutoComplete, Card, Modal, Select, Button, message } from "antd";
+import { AutoComplete, Card, Modal, Select, Button, message, Avatar, Rate } from "antd";
 import { MapPin, Navigation, ArrowLeftRight, Crosshair } from "lucide-react";
 import {
   searchLocations,
@@ -707,24 +707,68 @@ export default function BookingPage() {
 
             {currentRide?.driver && (
               <Card className="mb-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Tài xế</span>
-                    <span className="font-semibold">{currentRide.driver.fullName || currentRide.driver.name || 'N/A'}</span>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar
+                      size={48}
+                      src={
+                        currentRide.driver.avatar
+                          ? `http://localhost:8080${currentRide.driver.avatar}`
+                          : undefined
+                      }
+                    >
+                      {currentRide.driver.fullName?.charAt(0) || "T"}
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="font-semibold">
+                        {currentRide.driver.fullName || currentRide.driver.name || 'N/A'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {currentRide.driver.phoneNumber || currentRide.driver.phone || 'N/A'}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <Rate
+                        allowHalf
+                        disabled
+                        value={currentRide.driver.averageRating || 0}
+                        style={{ fontSize: 14 }}
+                      />
+                      <div className="text-xs text-gray-500 mt-1">
+                        {(currentRide.driver.totalRides || 0).toLocaleString()} chuyến
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">SĐT</span>
-                    <span className="font-medium">{currentRide.driver.phoneNumber || currentRide.driver.phone || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Biển số xe</span>
-                    <span className="font-semibold text-blue-600">
-                      {currentRide.driver.vehicle?.licensePlate || 
-                       currentRide.driver.driverVehicle?.licensePlate || 
-                       currentRide.vehicle?.licensePlate || 
-                       currentRide.licensePlate || 
-                       "N/A"}
-                    </span>
+
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Biển số</span>
+                      <span className="font-semibold text-blue-600">
+                        {currentRide.driver.vehicle?.licensePlate ||
+                         currentRide.driver.driverVehicle?.licensePlate ||
+                         currentRide.vehicle?.licensePlate ||
+                         currentRide.licensePlate ||
+                         "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Hãng xe</span>
+                      <span className="font-medium">
+                        {currentRide.driver.vehicle?.vehicleBrand || currentRide.driver.vehicle?.brand || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Dòng xe</span>
+                      <span className="font-medium">
+                        {currentRide.driver.vehicle?.vehicleModel || currentRide.driver.vehicle?.model || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Màu xe</span>
+                      <span className="font-medium">
+                        {currentRide.driver.vehicle?.vehicleColor || currentRide.driver.vehicle?.color || 'N/A'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </Card>
