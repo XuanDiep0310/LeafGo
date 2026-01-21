@@ -27,6 +27,22 @@ import {
   cancelRide,
   submitRating,
 } from "../../services/bookingService";
+import {
+  startSignalRConnection,
+  stopSignalRConnection,
+  joinRideGroup,
+  leaveRideGroup,
+  onRideAccepted,
+  onRideStatusChanged,
+  onDriverLocationUpdated,
+  onRideCompleted,
+  onRideCancelled,
+  offRideAccepted,
+  offRideStatusChanged,
+  offDriverLocationUpdated,
+  offRideCompleted,
+  offRideCancelled,
+} from "../../services/signalRService";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -71,32 +87,97 @@ export default function BookingPage() {
 
   const [currentRide, setCurrentRide] = useState(null);
   const [showTripModal, setShowTripModal] = useState(false);
-  const [pollingInterval, setPollingInterval] = useState(null);
+  const [driverLocation, setDriverLocation] = useState(null);
 
   const [rating, setRating] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
   const [ratingSubmitted, setRatingSubmitted] = useState(false);
 
+  // Track current ride ID for cleanup
+  const [currentRideId, setCurrentRideId] = useState(null);
+
+  // Initialize SignalR connection on mount
+  useEffect(() => {
+    const initSignalR = async () => {
+      try {
+        const conn = await startSignalRConnection(localStorage.getItem("accessToken"));
+        if (!conn) {
+          console.warn("[BookingPage] SignalR not available, using polling fallback");
+          return;
+        }
+        console.log("[BookingPage] SignalR initialized");
+
+        // Setup event listeners
+        onRideAccepted((data) => {
+          console.log("[BookingPage] Ride accepted:", data);
+          setCurrentRideId(data.rideId);
+          setCurrentRide((prev) => ({
+            ...prev,
+            driver: data.driver,
+            status: "Accepted",
+          }));
+          // Join ride group to get real-time updates
+          joinRideGroup(data.rideId).catch(console.error);
+        });
+
+        onRideStatusChanged((data) => {
+          console.log("[BookingPage] Ride status changed:", data);
+          setCurrentRide((prev) => ({
+            ...prev,
+            status: data.status,
+          }));
+        });
+
+        onDriverLocationUpdated((data) => {
+          console.log("[BookingPage] Driver location updated:", data);
+          setDriverLocation({
+            lat: data.latitude,
+            lng: data.longitude,
+          });
+        });
+
+        onRideCompleted((data) => {
+          console.log("[BookingPage] Ride completed:", data);
+          setCurrentRide((prev) => ({
+            ...prev,
+            status: "Completed",
+          }));
+          leaveRideGroup(data.rideId).catch(console.error);
+        });
+
+        onRideCancelled((data) => {
+          console.log("[BookingPage] Ride cancelled:", data);
+          setCurrentRide((prev) => ({
+            ...prev,
+            status: "Cancelled",
+          }));
+          leaveRideGroup(data.rideId).catch(console.error);
+        });
+
+        // After SignalR is ready, check for active ride
+        await checkActiveRide();
+      } catch (error) {
+        console.error("[BookingPage] Failed to initialize SignalR:", error);
+        console.warn("[BookingPage] Continuing without SignalR connection");
+      }
+    };
+
+    initSignalR();
+
+    // Cleanup on unmount
+    return () => {
+      offRideAccepted();
+      offRideStatusChanged();
+      offDriverLocationUpdated();
+      offRideCompleted();
+      offRideCancelled();
+    };
+  }, []);
+
   // Load vehicle types on mount
   useEffect(() => {
     loadVehicleTypes();
-    checkActiveRide();
   }, []);
-
-  // Poll for ride updates when there's an active ride
-  useEffect(() => {
-    if (currentRide && !['Completed', 'Cancelled'].includes(currentRide.status)) {
-      const interval = setInterval(() => {
-        pollRideStatus();
-      }, 3000); // Poll every 3 seconds
-      setPollingInterval(interval);
-
-      return () => clearInterval(interval);
-    } else if (pollingInterval) {
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
-    }
-  }, [currentRide]);
 
   const loadVehicleTypes = async () => {
     try {
@@ -116,20 +197,13 @@ export default function BookingPage() {
       if (activeRide) {
         setCurrentRide(activeRide);
         setShowTripModal(true);
+        // Join ride group to listen for real-time updates
+        if (activeRide.id) {
+          await joinRideGroup(activeRide.id);
+        }
       }
     } catch (error) {
       console.error('Error checking active ride:', error);
-    }
-  };
-
-  const pollRideStatus = async () => {
-    if (!currentRide?.id) return;
-
-    try {
-      const updatedRide = await getRideById(currentRide.id);
-      setCurrentRide(updatedRide);
-    } catch (error) {
-      console.error('Error polling ride status:', error);
     }
   };
 
@@ -281,8 +355,14 @@ export default function BookingPage() {
 
       const result = await createRide(rideData);
       setCurrentRide(result);
+      setCurrentRideId(result.id);
       setShowTripModal(true);
       message.success('Đã tạo chuyến đi thành công');
+
+      // Join ride group to receive real-time updates
+      if (result.id) {
+        await joinRideGroup(result.id);
+      }
 
       // Reset form
       setRouteConfirmed(false);
@@ -298,13 +378,36 @@ export default function BookingPage() {
   const handleCancelRide = async () => {
     if (!currentRide?.id) return;
 
+    // Only allow cancelling if ride is in Pending status
+    if (currentRide.status !== 'Pending') {
+      message.warning('Chỉ có thể hủy chuyến khi đang tìm tài xế');
+      return;
+    }
+
     try {
       await cancelRide(currentRide.id, 'Người dùng hủy chuyến');
       message.success('Đã hủy chuyến đi');
+      if (currentRideId) {
+        await leaveRideGroup(currentRideId);
+      }
       setShowTripModal(false);
       setCurrentRide(null);
+      setCurrentRideId(null);
+      setDriverLocation(null);
     } catch (error) {
-      message.error('Không thể hủy chuyến: ' + error.message);
+      // If ride is already cancelled, just close the modal
+      if (error.response?.data?.error?.includes('already cancelled')) {
+        message.info('Chuyến đã bị hủy');
+        if (currentRideId) {
+          await leaveRideGroup(currentRideId).catch(console.error);
+        }
+        setShowTripModal(false);
+        setCurrentRide(null);
+        setCurrentRideId(null);
+        setDriverLocation(null);
+      } else {
+        message.error('Không thể hủy chuyến: ' + error.message);
+      }
     }
   };
 
@@ -320,8 +423,13 @@ export default function BookingPage() {
       message.success('Cảm ơn bạn đã đánh giá!');
 
       setTimeout(() => {
+        if (currentRideId) {
+          leaveRideGroup(currentRideId).catch(console.error);
+        }
         setShowTripModal(false);
         setCurrentRide(null);
+        setCurrentRideId(null);
+        setDriverLocation(null);
         setRating(0);
         setRatingComment('');
         setRatingSubmitted(false);
@@ -509,6 +617,11 @@ export default function BookingPage() {
               <Popup>{dropoffLocation.fullAddress}</Popup>
             </Marker>
           )}
+          {driverLocation && (
+            <Marker position={[driverLocation.lat, driverLocation.lng]}>
+              <Popup>Tài xế đang ở đây</Popup>
+            </Marker>
+          )}
           {route?.coordinates && (
             <Polyline positions={route.coordinates} color="#10b981" weight={4} />
           )}
@@ -593,20 +706,24 @@ export default function BookingPage() {
             </h3>
 
             {currentRide?.driver && (
-              <Card>
+              <Card className="mb-4">
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span>Tài xế</span>
-                    <span className="font-semibold">{currentRide.driver.fullName}</span>
+                    <span className="text-gray-600">Tài xế</span>
+                    <span className="font-semibold">{currentRide.driver.fullName || currentRide.driver.name || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>SĐT</span>
-                    <span>{currentRide.driver.phoneNumber}</span>
+                    <span className="text-gray-600">SĐT</span>
+                    <span className="font-medium">{currentRide.driver.phoneNumber || currentRide.driver.phone || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Biển số</span>
-                    <span className="font-semibold">
-                      {currentRide.driver.vehicle?.licensePlate}
+                    <span className="text-gray-600">Biển số xe</span>
+                    <span className="font-semibold text-blue-600">
+                      {currentRide.driver.vehicle?.licensePlate || 
+                       currentRide.driver.driverVehicle?.licensePlate || 
+                       currentRide.vehicle?.licensePlate || 
+                       currentRide.licensePlate || 
+                       "N/A"}
                     </span>
                   </div>
                 </div>

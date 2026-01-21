@@ -4,10 +4,13 @@ import { useEffect, useState } from "react"
 import { useSelector } from "react-redux"
 import { Card, Statistic, message } from "antd"
 import { DollarSign, TrendingUp, Star, Calendar } from "lucide-react"
-import { getDriverStatistics } from "../../services/driverService"
+import { getDriverStatistics, getDriverVehicle } from "../../services/driverService"
+import { getUserProfile } from "../../services/userService"
 
 export default function DriverDashboardPage() {
   const { user } = useSelector((state) => state.auth)
+  const [userProfile, setUserProfile] = useState(null)
+  const [existingVehicle, setExistingVehicle] = useState(null)
   const [stats, setStats] = useState({
     TodayEarnings: 0,
     TodayRides: 0,
@@ -20,7 +23,39 @@ export default function DriverDashboardPage() {
 
   useEffect(() => {
     fetchStats()
+    fetchUserProfile()
+    fetchVehicle()
   }, [])
+
+  const fetchUserProfile = async () => {
+    try {
+      const profile = await getUserProfile()
+      setUserProfile(profile)
+    } catch (error) {
+      console.error("Error fetching user profile:", error)
+    }
+  }
+
+  const fetchVehicle = async () => {
+    try {
+      const vehicle = await getDriverVehicle()
+      console.log('[DashboardPage] Vehicle response:', vehicle)
+
+      // Handle different response structures
+      let vehicleData = vehicle
+
+      // If nested in vehicle.data
+      if (vehicle?.data && typeof vehicle.data === 'object') {
+        vehicleData = vehicle.data
+      }
+
+      setExistingVehicle(vehicleData)
+    } catch (error) {
+      console.error("Error fetching vehicle:", error)
+      // Don't show error message as vehicle might not be set up yet
+      setExistingVehicle(null)
+    }
+  }
 
   const fetchStats = async () => {
     try {
@@ -114,22 +149,33 @@ export default function DriverDashboardPage() {
       </div>
 
       <Card>
-        <h3 className="font-semibold text-foreground mb-4">Thông tin tài xế</h3>
-        <div className="grid grid-cols-2 gap-6">
+        <h3 className="font-semibold text-foreground mb-4">
+          Thông tin tài xế
+        </h3>
+
+        {/* Thông tin tài xế */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
           <div>
             <p className="text-sm text-muted-foreground mb-1">Họ tên</p>
-            <p className="font-medium text-foreground">{user?.fullName}</p>
+            <p className="font-medium text-foreground">
+              {userProfile?.fullName || user?.fullName}
+            </p>
           </div>
+
           <div>
             <p className="text-sm text-muted-foreground mb-1">Số điện thoại</p>
-            <p className="font-medium text-foreground">{user?.phone}</p>
+            <p className="font-medium text-foreground">
+              {userProfile?.data?.phoneNumber || user?.phoneNumber}
+            </p>
           </div>
+
           <div>
             <p className="text-sm text-muted-foreground mb-1">Đánh giá</p>
             <p className="font-medium text-foreground">
-              ⭐ {stats.AverageRating.toFixed(1)} / 5.0
+              ⭐ {stats?.AverageRating?.toFixed(1) || "0.0"} / 5.0
             </p>
           </div>
+
           <div>
             <p className="text-sm text-muted-foreground mb-1">Số dư</p>
             <p className="font-medium text-primary">
@@ -137,6 +183,38 @@ export default function DriverDashboardPage() {
             </p>
           </div>
         </div>
+
+        {/* Thông tin xe */}
+        <h4 className="font-semibold text-foreground mb-3">
+          Thông tin xe
+        </h4>
+
+        {existingVehicle ? (
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-xs font-semibold text-green-900 mb-2">
+              ✓ Xe đang sử dụng
+            </p>
+
+            <div className="text-sm text-green-800 space-y-1">
+              <p>
+                • Loại xe: {existingVehicle.vehicleType?.name || 'N/A'}
+              </p>
+              <p>
+                • Biển số: {existingVehicle.licensePlate || 'N/A'}
+              </p>
+              <p>
+                • Hãng & mẫu: {existingVehicle.vehicleBrand || 'N/A'} {existingVehicle.vehicleModel || ''}
+              </p>
+              <p>
+                • Màu xe: {existingVehicle.vehicleColor || 'N/A'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Chưa có thông tin xe
+          </p>
+        )}
       </Card>
     </div>
   )
