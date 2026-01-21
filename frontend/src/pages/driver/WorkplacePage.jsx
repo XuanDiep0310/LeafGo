@@ -23,6 +23,15 @@ import {
   updateDriverLocation,
   getDriverVehicle,
 } from "../../services/driverService"
+import {
+  startSignalRConnection,
+  joinRideGroup,
+  leaveRideGroup,
+  onNewRideRequest,
+  onRideStatusChanged,
+  offNewRideRequest,
+  offRideStatusChanged,
+} from "../../services/signalRService"
 import { format } from "date-fns"
 import { vi } from "date-fns/locale"
 import VehicleConfigModal from "../../components/VehicleConfigModal"
@@ -42,12 +51,61 @@ function WorkplacePageContent() {
   const [showVehicleModal, setShowVehicleModal] = useState(false)
   const [checkingVehicle, setCheckingVehicle] = useState(true)
 
+  // Initialize SignalR connection on mount
   useEffect(() => {
+    const initSignalR = async () => {
+      try {
+        const conn = await startSignalRConnection(localStorage.getItem("accessToken"))
+        if (!conn) {
+          console.warn("[WorkplacePage] SignalR not available, using polling fallback")
+          return
+        }
+        console.log("[WorkplacePage] SignalR initialized")
+
+        // Setup event listeners
+        onNewRideRequest((data) => {
+          console.log("[WorkplacePage] New ride request:", data)
+          loadPendingRides()
+        })
+
+        onRideStatusChanged((data) => {
+          console.log("[WorkplacePage] Ride status changed:", data)
+          if (currentTrip?.id === data.rideId) {
+            setCurrentTrip((prev) => ({
+              ...prev,
+              status: data.status,
+            }))
+          }
+        })
+      } catch (error) {
+        console.error("[WorkplacePage] Failed to initialize SignalR:", error)
+        console.warn("[WorkplacePage] Continuing without SignalR connection")
+      }
+    }
+
+    initSignalR()
+
+    // Cleanup on unmount
+    return () => {
+      offNewRideRequest()
+      offRideStatusChanged()
+    }
+  }, [])
+
+  useEffect(() => {
+    // Restore online status from localStorage when component mounts
+    const savedOnlineStatus = localStorage.getItem('driverOnlineStatus')
+    if (savedOnlineStatus === 'true') {
+      setIsOnline(true)
+      console.log('[WorkplacePage] Restored online status from localStorage')
+    }
+
     loadCurrentRide()
     getCurrentLocation()
     checkVehicleInfo()
   }, [])
 
+  // Poll for pending rides when online (keep as backup for initial load)
   useEffect(() => {
     let interval
     if (isOnline && !currentTrip) {
@@ -56,7 +114,7 @@ function WorkplacePageContent() {
       interval = setInterval(() => {
         console.log('[WorkplacePage] Polling for pending rides...')
         loadPendingRides()
-      }, 5000) // Poll every 5 seconds for better responsiveness
+      }, 10000) // Poll every 10 seconds as backup
     }
     return () => {
       if (interval) {
@@ -217,6 +275,16 @@ function WorkplacePageContent() {
     // Extract actual ride data if nested
     const rideData = ride.data || ride
 
+    // Normalize status: convert API status to internal format
+    let status = (rideData.status?.toLowerCase() || 'pending').trim()
+    // Handle different status formats from API
+    const statusMap = {
+      'inprogress': 'in_progress',
+      'driverarriving': 'arriving',
+      'driverarrived': 'arrived',
+    }
+    status = statusMap[status] || status
+
     const mapped = {
       id: rideData.id,
       createdAt: rideData.requestTime || rideData.requestedAt || rideData.createdAt || new Date().toISOString(),
@@ -234,7 +302,7 @@ function WorkplacePageContent() {
       price: rideData.estimatedPrice || rideData.finalPrice || 0,
       customerName: rideData.customerName || rideData.userName || "Khách hàng",
       customerPhone: rideData.customerPhone || rideData.userPhone || "",
-      status: rideData.status?.toLowerCase() || 'pending',
+      status: status,
       version: rideData.version || 0,
     }
 
@@ -255,6 +323,9 @@ function WorkplacePageContent() {
       console.log('[WorkplacePage] Toggling online status to:', checked)
       await toggleDriverOnline(checked)
       setIsOnline(checked)
+      // Save online status to localStorage
+      localStorage.setItem('driverOnlineStatus', checked.toString())
+      console.log('[WorkplacePage] Saved online status to localStorage:', checked)
       message.success(
         checked ? "Bạn đã online, sẵn sàng nhận chuyến!" : "Bạn đã offline"
       )
@@ -282,6 +353,10 @@ function WorkplacePageContent() {
       setPendingTrips(pendingTrips.filter((t) => t.id !== trip.id))
       setShowIncomingModal(false)
       setSelectedTrip(null)
+      // Join ride group to receive real-time updates
+      if (trip.id) {
+        await joinRideGroup(trip.id)
+      }
       message.success("Đã nhận chuyến!")
     } catch (error) {
       const errorMsg = error.response?.data?.error || error.message || "Không thể nhận chuyến"
@@ -333,7 +408,8 @@ function WorkplacePageContent() {
       message.success(statusMessages[status])
 
       if (status === "completed") {
-        setTimeout(() => {
+        setTimeout(async () => {
+          await leaveRideGroup(currentTrip.id)
           setCurrentTrip(null)
           if (isOnline) {
             loadPendingRides()
@@ -421,13 +497,14 @@ function WorkplacePageContent() {
       {process.env.NODE_ENV === 'development' && (
         <Card className="mb-6 bg-blue-50">
           <div className="text-xs space-y-1">
-            <div>Online: {isOnline ? 'Yes' : 'No'}</div>
-            <div>Has Vehicle: {hasVehicle ? 'Yes' : 'No'}</div>
-            <div>Current Trip: {currentTrip ? currentTrip.id : 'None'}</div>
-            <div>Pending Trips: {pendingTrips.length}</div>
+            <div>Trạng thái online: {isOnline ? 'Có' : 'Không'}</div>
+            <div>Có phương tiện: {hasVehicle ? 'Có' : 'Không'}</div>
+            <div>Chuyến hiện tại: {currentTrip ? currentTrip.id : 'Không có'}</div>
+            <div>Số chuyến đang chờ: {pendingTrips.length}</div>
           </div>
         </Card>
       )}
+
 
       {!currentTrip && isOnline && pendingTrips.length > 0 && (
         <Card className="mb-6">
