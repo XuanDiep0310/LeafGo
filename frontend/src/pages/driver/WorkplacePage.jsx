@@ -300,8 +300,8 @@ function WorkplacePageContent() {
       },
       distance: rideData.distance || 0,
       price: rideData.estimatedPrice || rideData.finalPrice || 0,
-      customerName: rideData.customerName || rideData.userName || "Khách hàng",
-      customerPhone: rideData.customerPhone || rideData.userPhone || "",
+      customerName: rideData.user.fullName || "Khách hàng",
+      customerPhone: rideData.user.phoneNumber || "",
       status: status,
       version: rideData.version || 0,
     }

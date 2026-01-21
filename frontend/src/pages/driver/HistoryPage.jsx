@@ -70,13 +70,13 @@ export default function DriverHistoryPage() {
         const dateStr = ride.requestTime || ride.createdAt || new Date().toISOString()
         const parsedDate = new Date(dateStr)
         const validDate = isNaN(parsedDate.getTime()) ? new Date() : parsedDate
-
+        console.log(ride)
         return {
           id: ride.id,
           createdAt: validDate,
-          userId: ride.customerId,
-          customerName: ride.customerName || "Khách hàng",
-          customerPhone: ride.customerPhone || "",
+          userId: ride.user.id,
+          customerName: ride.user.fullName || "Khách hàng",
+          customerPhone: ride.user.phoneNumber || "",
           pickupLocation: {
             address: ride.pickupAddress || "Chưa có địa chỉ",
             lat: ride.pickupLatitude || 0,
@@ -90,8 +90,8 @@ export default function DriverHistoryPage() {
           distance: ride.distance || 0,
           price: ride.finalPrice || ride.estimatedPrice || 0,
           status: ride.status,
-          rating: ride.rating,
-          comment: ride.comment,
+          rating: ride.rating.rating,
+          comment: ride.rating.comment,
         }
       })
 

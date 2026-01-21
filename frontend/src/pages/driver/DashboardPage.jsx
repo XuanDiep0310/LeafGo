@@ -18,6 +18,7 @@ export default function DriverDashboardPage() {
     ThisMonthRides: 0,
     TotalRides: 0,
     AverageRating: 0,
+    TotalEarnings: 0,
   })
   const [loading, setLoading] = useState(true)
 
@@ -63,8 +64,6 @@ export default function DriverDashboardPage() {
       const response = await getDriverStatistics()
 
       console.log('[DashboardPage] Statistics response:', response)
-      console.log('[DashboardPage] Response type:', typeof response)
-      console.log('[DashboardPage] Response keys:', Object.keys(response || {}))
 
       // Handle different response structures
       let data = response
@@ -76,7 +75,6 @@ export default function DriverDashboardPage() {
       }
 
       console.log('[DashboardPage] Final extracted data:', data)
-      console.log('[DashboardPage] Data keys:', Object.keys(data || {}))
 
       // Try both PascalCase and camelCase
       setStats({
@@ -86,6 +84,7 @@ export default function DriverDashboardPage() {
         ThisMonthRides: data?.ThisMonthRides || data?.thisMonthRides || 0,
         TotalRides: data?.TotalRides || data?.totalRides || 0,
         AverageRating: data?.AverageRating || data?.averageRating || 0,
+        TotalEarnings: data?.totalEarnings || 0,
       })
     } catch (error) {
       console.error("Error fetching stats:", error)
@@ -179,7 +178,7 @@ export default function DriverDashboardPage() {
           <div>
             <p className="text-sm text-muted-foreground mb-1">Số dư</p>
             <p className="font-medium text-primary">
-              {(user?.balance || 0).toLocaleString()}đ
+              {(stats?.TotalEarnings || 0).toLocaleString()}đ
             </p>
           </div>
         </div>
