@@ -13,6 +13,7 @@ import {
   Popconfirm,
   Card,
   Pagination,
+  Avatar,
 } from "antd";
 import {
   UserPlus,
@@ -181,11 +182,9 @@ export default function AdminUsersPage() {
       key: "fullName",
       render: (text, record) => (
         <div className="flex items-center gap-2">
-          <img
-            src={record.avatar || "/placeholder.svg"}
-            alt={text}
-            className="w-8 h-8 rounded-full"
-          />
+          <Avatar src={`${import.meta.env.VITE_API_URL}${record.avatar}`}>
+            {record.fullName?.charAt(0) || "U"}
+          </Avatar>
           <span>{text}</span>
         </div>
       ),

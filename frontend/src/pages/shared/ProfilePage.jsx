@@ -69,7 +69,7 @@ function ProfilePageContent() {
         // Convert relative path to full URL
         let avatarUrl = userData.avatar;
         if (avatarUrl.startsWith("/")) {
-          avatarUrl = `http://localhost:8080${avatarUrl}`;
+          avatarUrl = `${import.meta.env.VITE_API_URL}${avatarUrl}`;
         }
         setAvatar(avatarUrl);
       }
@@ -182,7 +182,7 @@ function ProfilePageContent() {
       if (avatarUrl) {
         // Convert relative path to full URL
         if (avatarUrl.startsWith("/")) {
-          avatarUrl = `http://localhost:8080${avatarUrl}`;
+          avatarUrl = `${import.meta.env.VITE_API_URL}${avatarUrl}`;
         }
         setAvatar(avatarUrl);
 

@@ -713,7 +713,7 @@ export default function BookingPage() {
                       size={48}
                       src={
                         currentRide.driver.avatar
-                          ? `http://localhost:8080${currentRide.driver.avatar}`
+                          ? `${import.meta.env.VITE_API_URL}${currentRide.driver.avatar}`
                           : undefined
                       }
                     >
