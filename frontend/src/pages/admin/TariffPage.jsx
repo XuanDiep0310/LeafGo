@@ -12,81 +12,109 @@ import {
   Popconfirm,
   Input,
   Select,
+  Spin,
 } from "antd";
 import { DollarSign, Edit, Trash2 } from "lucide-react";
-import { mockApi } from "../../services/mockData";
+import {
+  getVehicleTypes,
+  createVehicleType,
+  updateVehicleType,
+  deleteVehicleType,
+} from "../../services/adminService";
 
 // Implements FR-19
 export default function AdminTariffPage() {
-  const [tariff, setTariff] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [vehicleTypes, setVehicleTypes] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [editingVehicleType, setEditingVehicleType] = useState(null);
   const [vehicleTypeModalVisible, setVehicleTypeModalVisible] = useState(false);
   const [vehicleTypeForm] = Form.useForm();
 
   // Price calculator
-  const [calcVehicleTypeId, setCalcVehicleTypeId] = useState("bike");
+  const [calcVehicleTypeId, setCalcVehicleTypeId] = useState(null);
   const [calcDistance, setCalcDistance] = useState(10);
   const [calcPrice, setCalcPrice] = useState(0);
 
   useEffect(() => {
-    fetchTariff();
+    fetchVehicleTypes();
   }, []);
 
-  const fetchTariff = async () => {
+  const fetchVehicleTypes = async () => {
     try {
-      const currentTariff = await mockApi.getTariff();
-      setTariff(currentTariff);
-      setVehicleTypes(currentTariff.vehicleTypes || []);
+      setLoading(true);
+      const response = await getVehicleTypes();
+
+      if (response.success) {
+        setVehicleTypes(response.data);
+        // Set first vehicle type as default for calculator
+        if (response.data.length > 0 && !calcVehicleTypeId) {
+          setCalcVehicleTypeId(response.data[0].id);
+        }
+      } else {
+        message.error(response.message || 'Lỗi khi tải thông tin gói cước');
+      }
     } catch (error) {
-      message.error("Lỗi khi tải thông tin gói cước");
+      console.error('Error fetching vehicle types:', error);
+      message.error(error.response?.data?.error || 'Không thể tải thông tin gói cước');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmitVehicleType = async (values) => {
     try {
-      let updatedTypes = [...vehicleTypes];
+      let response;
 
       if (editingVehicleType) {
-        const index = updatedTypes.findIndex(
-          (vt) => vt.id === editingVehicleType.id
-        );
-        updatedTypes[index] = { ...editingVehicleType, ...values };
+        // Update existing vehicle type
+        response = await updateVehicleType(editingVehicleType.id, values);
       } else {
-        updatedTypes.push({
-          id: `type_${Date.now()}`,
-          ...values,
-        });
+        // Create new vehicle type
+        response = await createVehicleType(values);
       }
 
-      await mockApi.updateTariff({ vehicleTypes: updatedTypes });
-      setVehicleTypes(updatedTypes);
-      message.success(
-        editingVehicleType ? "Cập nhật thành công" : "Thêm mới thành công"
-      );
-      setVehicleTypeModalVisible(false);
-      setEditingVehicleType(null);
-      vehicleTypeForm.resetFields();
+      if (response.success) {
+        message.success(
+          editingVehicleType ? "Cập nhật thành công" : "Thêm mới thành công"
+        );
+        setVehicleTypeModalVisible(false);
+        setEditingVehicleType(null);
+        vehicleTypeForm.resetFields();
+        fetchVehicleTypes();
+      } else {
+        message.error(response.message || 'Có lỗi xảy ra');
+      }
     } catch (error) {
-      message.error("Có lỗi xảy ra");
+      console.error('Error saving vehicle type:', error);
+      message.error(error.response?.data?.error || error.message || 'Có lỗi xảy ra');
     }
   };
 
   const handleEditVehicleType = (vehicleType) => {
     setEditingVehicleType(vehicleType);
-    vehicleTypeForm.setFieldsValue(vehicleType);
+    vehicleTypeForm.setFieldsValue({
+      name: vehicleType.name,
+      basePrice: vehicleType.basePrice,
+      pricePerKm: vehicleType.pricePerKm,
+      description: vehicleType.description,
+      isActive: vehicleType.isActive,
+    });
     setVehicleTypeModalVisible(true);
   };
 
   const handleDeleteVehicleType = async (id) => {
     try {
-      const updated = vehicleTypes.filter((vt) => vt.id !== id);
-      await mockApi.updateTariff({ vehicleTypes: updated });
-      setVehicleTypes(updated);
-      message.success("Xóa thành công");
+      const response = await deleteVehicleType(id);
+
+      if (response.success) {
+        message.success("Xóa thành công");
+        fetchVehicleTypes();
+      } else {
+        message.error(response.message || 'Có lỗi xảy ra');
+      }
     } catch (error) {
-      message.error("Có lỗi xảy ra");
+      console.error('Error deleting vehicle type:', error);
+      message.error(error.response?.data?.error || error.message || 'Có lỗi xảy ra');
     }
   };
 
@@ -94,14 +122,86 @@ export default function AdminTariffPage() {
   useEffect(() => {
     const vehicleType = vehicleTypes.find((vt) => vt.id === calcVehicleTypeId);
     if (vehicleType && calcDistance > 0) {
-      const price =
-        vehicleType.baseFare + calcDistance * vehicleType.pricePerKm;
-      setCalcPrice(Math.max(price, vehicleType.minFare));
+      const price = vehicleType.basePrice + calcDistance * vehicleType.pricePerKm;
+      setCalcPrice(price);
+    } else {
+      setCalcPrice(0);
     }
   }, [calcVehicleTypeId, calcDistance, vehicleTypes]);
 
+  const columns = [
+    {
+      title: "Tên loại xe",
+      dataIndex: "name",
+      key: "name",
+    },
+    {
+      title: "Giá cơ bản (đ)",
+      dataIndex: "basePrice",
+      key: "basePrice",
+      render: (value) => value?.toLocaleString() || 0,
+    },
+    {
+      title: "Giá/km (đ)",
+      dataIndex: "pricePerKm",
+      key: "pricePerKm",
+      render: (value) => value?.toLocaleString() || 0,
+    },
+    {
+      title: "Mô tả",
+      dataIndex: "description",
+      key: "description",
+      ellipsis: true,
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "isActive",
+      key: "isActive",
+      render: (isActive) => (
+        <span className={isActive ? "text-green-600" : "text-red-600"}>
+          {isActive ? "✓ Hoạt động" : "✗ Không hoạt động"}
+        </span>
+      ),
+    },
+    {
+      title: "Số tài xế",
+      dataIndex: "totalDrivers",
+      key: "totalDrivers",
+    },
+    {
+      title: "Hành động",
+      key: "actions",
+      render: (_, record) => (
+        <div className="flex gap-2">
+          <Button
+            size="small"
+            icon={<Edit className="w-4 h-4" />}
+            onClick={() => handleEditVehicleType(record)}
+          >
+            Sửa
+          </Button>
+          <Popconfirm
+            title="Xóa loại xe này?"
+            description="Hành động này không thể hoàn tác"
+            onConfirm={() => handleDeleteVehicleType(record.id)}
+            okText="Xóa"
+            cancelText="Hủy"
+          >
+            <Button
+              size="small"
+              danger
+              icon={<Trash2 className="w-4 h-4" />}
+            >
+              Xóa
+            </Button>
+          </Popconfirm>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <h2 className="text-2xl font-bold text-foreground mb-6">
         Quản lý gói cước
       </h2>
@@ -124,63 +224,14 @@ export default function AdminTariffPage() {
           </Button>
         </div>
 
-        <Table
-          columns={[
-            {
-              title: "Tên loại xe",
-              dataIndex: "name",
-              key: "name",
-            },
-            {
-              title: "Giá mở cửa (đ)",
-              dataIndex: "baseFare",
-              key: "baseFare",
-              render: (value) => value.toLocaleString(),
-            },
-            {
-              title: "Giá/km (đ)",
-              dataIndex: "pricePerKm",
-              key: "pricePerKm",
-              render: (value) => value.toLocaleString(),
-            },
-            {
-              title: "Giá tối thiểu (đ)",
-              dataIndex: "minFare",
-              key: "minFare",
-              render: (value) => value.toLocaleString(),
-            },
-            {
-              title: "Hành động",
-              key: "actions",
-              render: (_, record) => (
-                <div className="flex gap-2">
-                  <Button
-                    size="small"
-                    icon={<Edit className="w-4 h-4" />}
-                    onClick={() => handleEditVehicleType(record)}
-                  >
-                    Sửa
-                  </Button>
-                  <Popconfirm
-                    title="Xóa loại xe này?"
-                    onConfirm={() => handleDeleteVehicleType(record.id)}
-                  >
-                    <Button
-                      size="small"
-                      danger
-                      icon={<Trash2 className="w-4 h-4" />}
-                    >
-                      Xóa
-                    </Button>
-                  </Popconfirm>
-                </div>
-              ),
-            },
-          ]}
-          dataSource={vehicleTypes}
-          rowKey="id"
-          pagination={false}
-        />
+        <Spin spinning={loading}>
+          <Table
+            columns={columns}
+            dataSource={vehicleTypes}
+            rowKey="id"
+            pagination={false}
+          />
+        </Spin>
       </Card>
 
       {/* Vehicle Type Modal */}
@@ -191,7 +242,10 @@ export default function AdminTariffPage() {
         onCancel={() => {
           setVehicleTypeModalVisible(false);
           setEditingVehicleType(null);
+          vehicleTypeForm.resetFields();
         }}
+        okText={editingVehicleType ? "Cập nhật" : "Tạo mới"}
+        cancelText="Hủy"
       >
         <Form
           form={vehicleTypeForm}
@@ -207,9 +261,9 @@ export default function AdminTariffPage() {
           </Form.Item>
 
           <Form.Item
-            name="baseFare"
-            label="Giá mở cửa (đồng)"
-            rules={[{ required: true, message: "Vui lòng nhập giá mở cửa" }]}
+            name="basePrice"
+            label="Giá cơ bản (đồng)"
+            rules={[{ required: true, message: "Vui lòng nhập giá cơ bản" }]}
           >
             <InputNumber
               min={0}
@@ -218,6 +272,7 @@ export default function AdminTariffPage() {
               formatter={(value) =>
                 `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
               }
+              parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
             />
           </Form.Item>
 
@@ -233,26 +288,33 @@ export default function AdminTariffPage() {
               formatter={(value) =>
                 `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
               }
+              parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
             />
           </Form.Item>
 
           <Form.Item
-            name="minFare"
-            label="Giá tối thiểu (đồng)"
-            rules={[{ required: true, message: "Vui lòng nhập giá tối thiểu" }]}
+            name="description"
+            label="Mô tả"
           >
-            <InputNumber
-              min={0}
-              step={1000}
-              className="w-full"
-              formatter={(value) =>
-                `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-              }
-            />
+            <Input.TextArea rows={3} placeholder="Mô tả về loại xe..." />
           </Form.Item>
+
+          {editingVehicleType && (
+            <Form.Item
+              name="isActive"
+              label="Trạng thái"
+              valuePropName="checked"
+            >
+              <Select>
+                <Select.Option value={true}>Hoạt động</Select.Option>
+                <Select.Option value={false}>Không hoạt động</Select.Option>
+              </Select>
+            </Form.Item>
+          )}
         </Form>
       </Modal>
 
+      {/* Price Calculator */}
       <Card>
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
@@ -274,10 +336,12 @@ export default function AdminTariffPage() {
               onChange={setCalcVehicleTypeId}
               className="w-full"
               size="large"
-              options={vehicleTypes.map((vt) => ({
-                label: vt.name,
-                value: vt.id,
-              }))}
+              options={vehicleTypes
+                .filter(vt => vt.isActive)
+                .map((vt) => ({
+                  label: vt.name,
+                  value: vt.id,
+                }))}
             />
           </div>
 
@@ -295,6 +359,7 @@ export default function AdminTariffPage() {
               formatter={(value) =>
                 `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
               }
+              parser={(value) => value.replace(/\$\s?|(,*)/g, "")}
             />
           </div>
 
@@ -308,11 +373,11 @@ export default function AdminTariffPage() {
                 ={" "}
                 {vehicleTypes
                   .find((vt) => vt.id === calcVehicleTypeId)
-                  ?.baseFare.toLocaleString()}
-                đ (mở cửa) + {calcDistance}km ×{" "}
+                  ?.basePrice?.toLocaleString()}
+                đ (cơ bản) + {calcDistance}km ×{" "}
                 {vehicleTypes
                   .find((vt) => vt.id === calcVehicleTypeId)
-                  ?.pricePerKm.toLocaleString()}
+                  ?.pricePerKm?.toLocaleString()}
                 đ/km
               </p>
             )}

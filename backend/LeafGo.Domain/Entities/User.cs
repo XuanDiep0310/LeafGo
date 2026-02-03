@@ -25,8 +25,11 @@ public partial class User
 
     // Navigation properties
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
-    //public virtual ICollection<Ride> RidesAsUser { get; set; } = new List<Ride>();
-    //public virtual ICollection<Ride> RidesAsDriver { get; set; } = new List<Ride>();
-    //public virtual ICollection<Rating> RatingsAsUser { get; set; } = new List<Rating>();
-    //public virtual ICollection<Rating> RatingsAsDriver { get; set; } = new List<Rating>();
+    public virtual ICollection<Ride> RidesAsUser { get; set; } = new List<Ride>();
+    public virtual ICollection<Ride> RidesAsDriver { get; set; } = new List<Ride>();
+    public virtual ICollection<Ratings> RatingsAsUser { get; set; } = new List<Ratings>();
+    public virtual ICollection<Ratings> RatingsAsDriver { get; set; } = new List<Ratings>();
+    public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public virtual DriverVehicle? DriverVehicle { get; set; }
+    public virtual DriverLocation? DriverLocation { get; set; }
 }

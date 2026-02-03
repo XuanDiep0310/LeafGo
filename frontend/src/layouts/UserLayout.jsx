@@ -4,7 +4,7 @@ import { Outlet, Link, useLocation } from "react-router-dom"
 import { useDispatch, useSelector } from "react-redux"
 import { logout } from "../store/slices/authSlice"
 import { Home, History, User, LogOut, Leaf } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button } from "antd"
 
 export default function UserLayout() {
   const location = useLocation()

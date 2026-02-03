@@ -4,7 +4,7 @@ import { Outlet, Link, useLocation } from "react-router-dom"
 import { useDispatch, useSelector } from "react-redux"
 import { logout } from "../store/slices/authSlice"
 import { LayoutDashboard, Users, Route, DollarSign, User, LogOut, Leaf } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button } from "antd"
 
 export default function AdminLayout() {
   const location = useLocation()
@@ -48,11 +48,10 @@ export default function AdminLayout() {
                 <li key={item.path}>
                   <Link
                     to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
-                    }`}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                      }`}
                   >
                     <Icon className="w-5 h-5" />
                     <span className="font-medium">{item.label}</span>
