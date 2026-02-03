@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from "react-redux"
 import { Link } from "react-router-dom"
 import { Form, Input, Button, Card, Steps, message } from "antd"
 import { Leaf, ArrowLeft } from "lucide-react"
-import { sendResetPasswordOTP, resetPasswordWithOTP } from "../../store/slices/authSlice"
+import { forgotPassword, resetPassword } from "../../store/slices/authSlice"
 
 const { Step } = Steps
 
@@ -15,35 +15,32 @@ export default function ForgotPasswordPage() {
   const { loading } = useSelector((state) => state.auth)
   const [currentStep, setCurrentStep] = useState(0)
   const [email, setEmail] = useState("")
-  const [mockOtp, setMockOtp] = useState("")
 
-  // FR-02: Step 1 - Send OTP
-  const handleSendOTP = async (values) => {
+  // FR-02: Step 1 - Send reset password email
+  const handleSendResetEmail = async (values) => {
     try {
-      const result = await dispatch(sendResetPasswordOTP(values.email)).unwrap()
+      await dispatch(forgotPassword(values.email)).unwrap()
       setEmail(values.email)
-      setMockOtp(result.mockOtp)
-      message.success("Mã OTP đã được gửi đến email của bạn")
+      message.success("Email đặt lại mật khẩu đã được gửi đến hộp thư của bạn")
       setCurrentStep(1)
     } catch (error) {
-      message.error(error)
+      message.error(error || "Có lỗi xảy ra, vui lòng thử lại")
     }
   }
 
-  // FR-02: Step 2 - Reset password with OTP
+  // FR-02: Step 2 - Reset password with token
   const handleResetPassword = async (values) => {
     try {
       await dispatch(
-        resetPasswordWithOTP({
-          email,
-          otp: values.otp,
+        resetPassword({
+          token: values.token,
           newPassword: values.password,
         }),
       ).unwrap()
       message.success("Đặt lại mật khẩu thành công!")
       setCurrentStep(2)
     } catch (error) {
-      message.error(error)
+      message.error(error || "Token không hợp lệ hoặc đã hết hạn")
     }
   }
 
@@ -68,12 +65,12 @@ export default function ForgotPasswordPage() {
 
         <Steps current={currentStep} className="mb-8">
           <Step title="Nhập email" />
-          <Step title="Xác thực OTP" />
+          <Step title="Nhập token và mật khẩu mới" />
           <Step title="Hoàn thành" />
         </Steps>
 
         {currentStep === 0 && (
-          <Form layout="vertical" onFinish={handleSendOTP} size="large">
+          <Form layout="vertical" onFinish={handleSendResetEmail} size="large">
             <Form.Item
               label="Email"
               name="email"
@@ -86,7 +83,7 @@ export default function ForgotPasswordPage() {
             </Form.Item>
             <Form.Item>
               <Button type="primary" htmlType="submit" loading={loading} className="w-full">
-                Gửi mã OTP
+                Gửi email đặt lại mật khẩu
               </Button>
             </Form.Item>
           </Form>
@@ -94,15 +91,17 @@ export default function ForgotPasswordPage() {
 
         {currentStep === 1 && (
           <div>
-            {mockOtp && (
-              <div className="mb-4 p-3 bg-primary/10 rounded-lg text-center">
-                <p className="text-sm text-muted-foreground">Mã OTP của bạn (Demo):</p>
-                <p className="text-2xl font-bold text-primary">{mockOtp}</p>
-              </div>
-            )}
+            <div className="mb-4 p-3 bg-primary/10 rounded-lg text-sm text-muted-foreground">
+              <p>Vui lòng kiểm tra email <strong>{email}</strong> và nhập token từ link đặt lại mật khẩu.</p>
+            </div>
             <Form layout="vertical" onFinish={handleResetPassword} size="large">
-              <Form.Item label="Mã OTP" name="otp" rules={[{ required: true, message: "Vui lòng nhập mã OTP" }]}>
-                <Input placeholder="Nhập mã OTP" maxLength={6} />
+              <Form.Item 
+                label="Token" 
+                name="token" 
+                rules={[{ required: true, message: "Vui lòng nhập token từ email" }]}
+                help="Token được gửi trong email đặt lại mật khẩu"
+              >
+                <Input placeholder="Nhập token từ email" />
               </Form.Item>
               <Form.Item
                 label="Mật khẩu mới"

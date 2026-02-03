@@ -14,7 +14,9 @@ import {
   Upload,
 } from "antd";
 import { User, Lock, Save, Upload as UploadIcon, Car } from "lucide-react";
-import { updateProfile, changePassword } from "../../store/slices/authSlice";
+// import { updateProfile, changePassword } from "../../store/slices/authSlice";
+import authService from "../../services/authService";
+
 import { mockApi } from "../../services/mockData";
 
 const { TabPane } = Tabs;
@@ -45,22 +47,35 @@ export default function ProfilePage() {
   };
 
   // FR-02: Change password
+  // const handleChangePassword = async (values) => {
+  //   try {
+  //     await dispatch(
+  //       changePassword({
+  //         userId: user.id,
+  //         oldPassword: values.oldPassword,
+  //         newPassword: values.newPassword,
+  //       })
+  //     ).unwrap();
+  //     message.success("Đổi mật khẩu thành công");
+  //     setPasswordModalVisible(false);
+  //     passwordForm.resetFields();
+  //   } catch (error) {
+  //     message.error(error);
+  //   }
+  // };
+
   const handleChangePassword = async (values) => {
     try {
-      await dispatch(
-        changePassword({
-          userId: user.id,
-          oldPassword: values.oldPassword,
-          newPassword: values.newPassword,
-        })
-      ).unwrap();
+      await authService.changePassword(
+        values.currentPassword,
+        values.newPassword
+      );
       message.success("Đổi mật khẩu thành công");
-      setPasswordModalVisible(false);
-      passwordForm.resetFields();
-    } catch (error) {
-      message.error(error);
+    } catch (err) {
+      message.error(err.response?.data?.error || err.message);
     }
   };
+  
 
   return (
     <div className="p-6 max-w-3xl mx-auto">

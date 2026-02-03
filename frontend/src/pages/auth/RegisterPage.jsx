@@ -32,7 +32,15 @@ export default function RegisterPage() {
 
   // FR-01: Handle register
   const handleRegister = async (values) => {
-    await dispatch(register(values));
+    // Map form values to API format
+    const registerData = {
+      email: values.email,
+      password: values.password,
+      fullName: values.fullName,
+      phoneNumber: values.phone,
+      role: values.role === "driver" ? "Driver" : "User", // API expects "Driver" or "User"
+    };
+    await dispatch(register(registerData));
   };
 
   return (

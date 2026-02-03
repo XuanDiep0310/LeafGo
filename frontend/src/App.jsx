@@ -27,6 +27,12 @@ import AdminTariffPage from "./pages/admin/TariffPage"
 // Shared Pages
 import ProfilePage from "./pages/shared/ProfilePage"
 
+// Helper to normalize role (API returns "Admin", "User", "Driver" with capital first letter)
+const normalizeRole = (role) => {
+  if (!role) return null
+  return role.toLowerCase()
+}
+
 // Private Route Component
 const PrivateRoute = ({ children, allowedRoles }) => {
   const { user, isAuthenticated } = useSelector((state) => state.auth)
@@ -35,8 +41,12 @@ const PrivateRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />
   }
 
-  if (allowedRoles && !allowedRoles.includes(user?.role)) {
-    return <Navigate to="/" replace />
+  if (allowedRoles && user?.role) {
+    const userRole = normalizeRole(user.role)
+    const normalizedAllowedRoles = allowedRoles.map(normalizeRole)
+    if (!normalizedAllowedRoles.includes(userRole)) {
+      return <Navigate to="/" replace />
+    }
   }
 
   return children
@@ -48,9 +58,10 @@ function App() {
   // Redirect root based on role
   const getRootRedirect = () => {
     if (!isAuthenticated) return "/login"
-    if (user?.role === "user") return "/user/booking"
-    if (user?.role === "driver") return "/driver/workplace"
-    if (user?.role === "admin") return "/admin/dashboard"
+    const role = normalizeRole(user?.role)
+    if (role === "user") return "/user/booking"
+    if (role === "driver") return "/driver/workplace"
+    if (role === "admin") return "/admin/dashboard"
     return "/login"
   }
 

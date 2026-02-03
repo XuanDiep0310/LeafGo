@@ -16,11 +16,14 @@ export default function LoginPage() {
   );
 
   useEffect(() => {
-    if (isAuthenticated && user) {
-      // Redirect based on role
-      if (user.role === "user") navigate("/user/booking");
-      else if (user.role === "driver") navigate("/driver/workplace");
-      else if (user.role === "admin") navigate("/admin/dashboard");
+    // Chỉ redirect nếu đã authenticated và user có role
+    // Sử dụng case-insensitive comparison để đảm bảo hoạt động với cả "Admin" và "admin"
+    if (isAuthenticated && user && user.role) {
+      const role = user.role.toLowerCase();
+      console.log("Redirecting user with role:", user.role);
+      if (role === "user") navigate("/user/booking", { replace: true });
+      else if (role === "driver") navigate("/driver/workplace", { replace: true });
+      else if (role === "Admin") navigate("/admin/dashboard", { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -31,39 +34,41 @@ export default function LoginPage() {
     }
   }, [error, dispatch]);
 
-  // FR-01: Handle login
-  const handleLogin = async (values) => {
-    await dispatch(login(values));
+  const onFinish = (values) => {
+    console.log("Login submit:", values);
+    dispatch(login(values));
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary flex items-center justify-center">
-            <Leaf className="w-10 h-10 text-primary-foreground" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Leaf Go</h1>
-          <p className="text-muted-foreground">
-            Đăng nhập vào tài khoản của bạn
-          </p>
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <Card style={{ width: 400 }}>
+        <div className="flex justify-center mb-6">
+          <Leaf className="w-8 h-8 text-green-500" />
         </div>
+        <h1 className="text-center text-2xl font-bold mb-6">LeafGo</h1>
 
-        <Form layout="vertical" onFinish={handleLogin} size="large">
+        <Form
+          layout="vertical"
+          onFinish={onFinish}
+          autoComplete="off"
+        >
           <Form.Item
-            label="Số điện thoại"
-            name="phone"
-            rules={[{ required: true, message: "Vui lòng nhập số điện thoại" }]}
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, message: "Vui lòng nhập email" },
+              { type: "email", message: "Email không hợp lệ" },
+            ]}
           >
-            <Input placeholder="0123456789" />
+            <Input placeholder="your@email.com" />
           </Form.Item>
 
           <Form.Item
-            label="Mật khẩu"
             name="password"
+            label="Mật khẩu"
             rules={[{ required: true, message: "Vui lòng nhập mật khẩu" }]}
           >
-            <Input.Password placeholder="Nhập mật khẩu" />
+            <Input.Password placeholder="••••••••" />
           </Form.Item>
 
           <Form.Item>
@@ -71,33 +76,15 @@ export default function LoginPage() {
               type="primary"
               htmlType="submit"
               loading={loading}
-              className="w-full"
+              block
             >
               Đăng nhập
             </Button>
           </Form.Item>
         </Form>
 
-        <div className="text-center space-y-2 text-sm">
-          <Link
-            to="/forgot-password"
-            className="text-primary hover:underline block"
-          >
-            Quên mật khẩu?
-          </Link>
-          <div className="text-muted-foreground">
-            Chưa có tài khoản?{" "}
-            <Link to="/register" className="text-primary hover:underline">
-              Đăng ký ngay
-            </Link>
-          </div>
-        </div>
-
-        <div className="mt-6 p-4 bg-accent rounded-lg text-sm text-muted-foreground">
-          <p className="font-semibold mb-2">Tài khoản demo:</p>
-          <p>• Khách hàng: 0123456789 / 123456</p>
-          <p>• Tài xế: 0987654321 / 123456</p>
-          <p>• Admin: 0909090909 / admin123</p>
+        <div className="text-center">
+          <Link to="/register">Chưa có tài khoản? Đăng ký</Link>
         </div>
       </Card>
     </div>

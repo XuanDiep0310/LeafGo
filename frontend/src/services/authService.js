@@ -1,149 +1,188 @@
-import { mockApi } from "./mockData";
+import http from "./http";
 
-// Simulates backend authentication
-// Implements FR-01, FR-02
+const authService = {
+  // ======================
+  // LOGIN
+  // POST /api/Auth/login
+  // ======================
+  // ...existing code...
+  // ======================
+  // LOGIN
+  // POST /api/Auth/login
+  // ======================
+  login: async (email, password) => {
+    try {
+      const res = await http.post("/Auth/login", { email, password });
+      console.log("LOGIN RESPONSE:", res.data);
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      // support different response shapes
+      const payload = res.data?.data ?? res.data ?? {};
+      // tokens might be top-level in payload or inside payload.tokens
+      const accessToken = payload.accessToken ?? payload.tokens?.accessToken;
+      const refreshToken = payload.refreshToken ?? payload.tokens?.refreshToken;
 
-export const authService = {
-  // FR-01: Login functionality - using phone number instead of username
-  login: async (phone, password) => {
-    await delay(1000); // Simulate network delay
+      // derive user: prefer payload.user, otherwise remove known token fields from payload
+      let user = payload.user ?? null;
+      if (!user) {
+        const { accessToken: _at, refreshToken: _rt, tokens, ...rest } = payload;
+        user = Object.keys(rest).length ? rest : null;
+      }
 
-    const users = await mockApi.getAllUsers();
-    const user = users.find(
-      (u) => u.phone === phone && u.password === password
-    );
+      if (accessToken) localStorage.setItem("accessToken", accessToken);
+      if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+      if (user) localStorage.setItem("user", JSON.stringify(user));
 
-    if (!user) {
-      throw new Error("Số điện thoại hoặc mật khẩu không đúng");
+      return user;
+    } catch (err) {
+      console.error("authService.login error:", err.response ?? err);
+      // rethrow so caller (thunk) can handle and produce user-facing message
+      throw err;
+    }
+  },
+// ...existing code...
+  
+
+
+  // ======================
+  // REGISTER
+  // POST /api/Auth/register
+  // ======================
+  register: async ({ email, password, fullName, phoneNumber, role }) => {
+    const res = await http.post("/Auth/register", {
+      email,
+      password,
+      fullName,
+      phoneNumber,
+      role,
+    });
+  
+    const {
+      accessToken,
+      refreshToken,
+      ...user
+    } = res.data.data;
+  
+    localStorage.setItem("accessToken", accessToken);
+    localStorage.setItem("refreshToken", refreshToken);
+    localStorage.setItem("user", JSON.stringify(user)); 
+  
+    return user;
+  },
+  
+
+  // ======================
+  // REFRESH TOKEN
+  // POST /api/Auth/refresh-token
+  // ======================
+  refreshToken: async () => {
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    if (!refreshToken) {
+      throw new Error("No refresh token found");
     }
 
-    if (!user.isActive) {
-      throw new Error("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên");
+    const res = await http.post("/Auth/refresh-token", {
+      refreshToken,
+    });
+
+    const { accessToken, refreshToken: newRefreshToken } = res.data.data;
+
+    localStorage.setItem("accessToken", accessToken);
+    if (newRefreshToken) {
+      localStorage.setItem("refreshToken", newRefreshToken);
     }
 
-    // Don't return password
-    const { password: _, ...userWithoutPassword } = user;
-    return {
-      user: userWithoutPassword,
-      token: `mock_token_${user.id}`,
-    };
+    return accessToken;
   },
 
-  // FR-01: Register functionality (User/Driver only)
-  register: async (userData) => {
-    await delay(1000);
-
-    const users = await mockApi.getAllUsers();
-    const existingUser = users.find(
-      (u) => u.email === userData.email || u.phone === userData.phone
-    );
-
-    if (existingUser) {
-      throw new Error("Email hoặc số điện thoại đã tồn tại");
+  // ======================
+  // LOGOUT / REVOKE TOKEN
+  // POST /api/Auth/revoke-token
+  // ======================
+  logout: async () => {
+    const refreshToken = localStorage.getItem("refreshToken");
+  
+    if (refreshToken) {
+      await http.post("/Auth/revoke-token", { refreshToken });
     }
-
-    // Admin cannot register through public form
-    if (userData.role === "admin") {
-      throw new Error("Không thể đăng ký tài khoản admin");
-    }
-
-    // Auto-generate username from phone number
-    const generatedUsername = `user_${userData.phone.replace(/[^0-9]/g, "")}`;
-    const registerData = {
-      ...userData,
-      username: generatedUsername,
-    };
-
-    const newUser = await mockApi.createUser(registerData);
-    const { password: _, ...userWithoutPassword } = newUser;
-    return {
-      user: userWithoutPassword,
-      token: `mock_token_${newUser.id}`,
-    };
+  
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user"); // ✅
   },
 
-  // FR-02: Forgot password - Step 1: Send OTP
-  sendResetPasswordOTP: async (email) => {
-    await delay(1000);
+  // ======================
+  // REVOKE ALL TOKENS
+  // POST /api/Auth/revoke-all-tokens
+  // ======================
+  revokeAllTokens: async () => {
+    const res = await http.post("/Auth/revoke-all-tokens");
 
-    const users = await mockApi.getAllUsers();
-    const user = users.find((u) => u.email === email);
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("user");
 
-    if (!user) {
-      throw new Error("Email không tồn tại trong hệ thống");
-    }
-
-    // Simulate sending OTP (in real app, this would send to email)
-    const otp = "123456"; // Mock OTP
-    console.log(`[Mock] OTP gửi đến ${email}: ${otp}`);
-
-    return {
-      success: true,
-      message: "Mã OTP đã được gửi đến email của bạn",
-      mockOtp: otp, // For testing purposes
-    };
+    return res.data;
   },
 
-  // FR-02: Forgot password - Step 2: Reset password with OTP
-  resetPasswordWithOTP: async (email, otp, newPassword) => {
-    await delay(1000);
+  // ======================
+  // GET ALL TOKENS
+  // GET /api/Auth/tokens
+  // ======================
+  getTokens: async () => {
+    const res = await http.get("/Auth/tokens");
+    return res.data.data;
+  },
+  
 
-    // Verify OTP (in real app, this would check against stored OTP)
-    if (otp !== "123456") {
-      throw new Error("Mã OTP không đúng");
-    }
+  // ======================
+  // CHANGE PASSWORD (logged-in user)
+  // POST /api/Auth/change-password
+  // ======================
+  changePassword: async (currentPassword, newPassword) => {
+    const res = await http.post("/Auth/change-password", {
+      currentPassword,
+      newPassword,
+    });
 
-    const users = await mockApi.getAllUsers();
-    const user = users.find((u) => u.email === email);
-
-    if (!user) {
-      throw new Error("Email không tồn tại");
-    }
-
-    // Update password
-    await mockApi.updateUser(user.id, { password: newPassword });
-
-    return {
-      success: true,
-      message: "Mật khẩu đã được đặt lại thành công",
-    };
+    return res.data;
   },
 
-  // FR-02: Change password (from profile)
-  changePassword: async (userId, oldPassword, newPassword) => {
-    await delay(1000);
+  // ======================
+  // FORGOT PASSWORD
+  // POST /api/Auth/forgot-password
+  // ======================
+  forgotPassword: async (email) => {
+    const res = await http.post("/Auth/forgot-password", {
+      email,
+    });
 
-    const user = await mockApi.getUserById(userId);
-
-    if (!user) {
-      throw new Error("Người dùng không tồn tại");
-    }
-
-    if (user.password !== oldPassword) {
-      throw new Error("Mật khẩu cũ không đúng");
-    }
-
-    await mockApi.updateUser(userId, { password: newPassword });
-
-    return {
-      success: true,
-      message: "Đổi mật khẩu thành công",
-    };
+    return res.data;
   },
 
-  // FR-54, FR-04: Update profile
-  updateProfile: async (userId, profileData) => {
-    await delay(1000);
+  // ======================
+  // RESET PASSWORD
+  // POST /api/Auth/reset-password
+  // ======================
+  resetPassword: async (token, newPassword) => {
+    const res = await http.post("/Auth/reset-password", {
+      token,
+      newPassword,
+    });
 
-    const updatedUser = await mockApi.updateUser(userId, profileData);
+    return res.data;
+  },
 
-    if (!updatedUser) {
-      throw new Error("Cập nhật thất bại");
-    }
+  // ======================
+  // HELPERS
+  // ======================
+  getAccessToken: () => {
+    return localStorage.getItem("accessToken");
+  },
 
-    const { password: _, ...userWithoutPassword } = updatedUser;
-    return userWithoutPassword;
+  isAuthenticated: () => {
+    return !!localStorage.getItem("accessToken");
   },
 };
+
+export default authService;
