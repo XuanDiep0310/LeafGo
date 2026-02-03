@@ -21,9 +21,10 @@ export async function toggleDriverOnline(isOnline) {
  * @returns {Promise} API response
  */
 export async function updateDriverLocation(latitude, longitude) {
+    // Send PascalCase keys to match backend DTO (still works if backend uses camelCase policy)
     const res = await apiClient.post("/api/Drivers/update-location", {
-        latitude,
-        longitude
+        Latitude: latitude,
+        Longitude: longitude,
     });
     return res.data;
 }
@@ -142,7 +143,15 @@ export async function getDriverVehicle() {
  * @returns {Promise} Updated vehicle details
  */
 export async function updateDriverVehicle(payload) {
-    const res = await apiClient.put("/api/Drivers/vehicle", payload);
+    // Backend DTO uses PascalCase: VehicleTypeId, LicensePlate, VehicleBrand, VehicleModel, VehicleColor
+    // Accept both camelCase and PascalCase inputs from UI.
+    const res = await apiClient.put("/api/Drivers/vehicle", {
+        VehicleTypeId: payload.VehicleTypeId ?? payload.vehicleTypeId,
+        LicensePlate: payload.LicensePlate ?? payload.licensePlate,
+        VehicleBrand: payload.VehicleBrand ?? payload.vehicleBrand,
+        VehicleModel: payload.VehicleModel ?? payload.vehicleModel,
+        VehicleColor: payload.VehicleColor ?? payload.vehicleColor,
+    });
     return res.data;
 }
 

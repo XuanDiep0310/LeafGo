@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Modal, Form, Input, Select, Button, message, Spin, Empty, Alert } from "antd";
+import { Modal, Form, Input, Select, Button, Spin, Empty, Alert, App } from "antd";
 import { Car, AlertCircle, RefreshCw } from "lucide-react";
 import { getDriverVehicle, updateDriverVehicle, getVehicleTypes } from "../services/driverService";
 
@@ -7,6 +7,7 @@ const { Option } = Select;
 
 export default function VehicleConfigModal({ open, onClose, onSuccess }) {
     const [form] = Form.useForm();
+    const { message } = App.useApp();
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const [vehicleTypes, setVehicleTypes] = useState([]);
@@ -64,7 +65,18 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                 }
 
                 // Filter active types
-                const activeTypes = types.filter(vt => vt.isActive !== false);
+                // Normalize key casing just in case backend returns PascalCase fields (Id/Name/IsActive...)
+                const normalizedTypes = types.map((vt) => ({
+                    id: vt.id ?? vt.Id,
+                    name: vt.name ?? vt.Name,
+                    basePrice: vt.basePrice ?? vt.BasePrice,
+                    pricePerKm: vt.pricePerKm ?? vt.PricePerKm,
+                    description: vt.description ?? vt.Description,
+                    isActive: vt.isActive ?? vt.IsActive,
+                    raw: vt,
+                }));
+
+                const activeTypes = normalizedTypes.filter(vt => vt.isActive !== false);
                 console.log(`✅ Active Vehicle Types (${activeTypes.length}):`, activeTypes);
 
                 setVehicleTypes(activeTypes);
@@ -89,11 +101,11 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                     setExistingVehicle(vehicle);
 
                     form.setFieldsValue({
-                        vehicleTypeId: vehicle.vehicleType?.id,
-                        licensePlate: vehicle.licensePlate,
-                        vehicleBrand: vehicle.vehicleBrand,
-                        vehicleModel: vehicle.vehicleModel,
-                        vehicleColor: vehicle.vehicleColor,
+                        vehicleTypeId: vehicle.vehicleType?.id ?? vehicle.vehicleType?.Id,
+                        licensePlate: vehicle.licensePlate ?? vehicle.LicensePlate,
+                        vehicleBrand: vehicle.vehicleBrand ?? vehicle.VehicleBrand,
+                        vehicleModel: vehicle.vehicleModel ?? vehicle.VehicleModel,
+                        vehicleColor: vehicle.vehicleColor ?? vehicle.VehicleColor,
                     });
 
                     setSelectedType(vehicle.vehicleType);
@@ -194,7 +206,9 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
 
             {fetching ? (
                 <div className="py-8 text-center">
-                    <Spin tip="Đang tải thông tin..." fullscreen={false} />
+                    <Spin tip="Đang tải thông tin...">
+                        <div style={{ height: 24 }} />
+                    </Spin>
                 </div>
             ) : (
                 <Form form={form} layout="vertical" onFinish={handleSubmit}>
@@ -241,14 +255,14 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                     {selectedType && (
                         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                             <p className="text-sm font-semibold text-blue-900 mb-2">
-                                Bảng giá: {selectedType.name}
+                                Bảng giá: {selectedType.name ?? selectedType.Name}
                             </p>
                             <div className="text-sm text-blue-800">
                                 <span>Giá khởi điểm: </span>
-                                <span className="font-bold">{selectedType.basePrice?.toLocaleString()}đ</span>
+                                <span className="font-bold">{(selectedType.basePrice ?? selectedType.BasePrice)?.toLocaleString()}đ</span>
                                 <span className="mx-2">•</span>
                                 <span>Giá/km: </span>
-                                <span className="font-bold">{selectedType.pricePerKm?.toLocaleString()}đ</span>
+                                <span className="font-bold">{(selectedType.pricePerKm ?? selectedType.PricePerKm)?.toLocaleString()}đ</span>
                             </div>
                         </div>
                     )}
