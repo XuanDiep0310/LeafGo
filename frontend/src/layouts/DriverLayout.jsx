@@ -66,7 +66,6 @@ export default function DriverLayout() {
             <img src={user?.avatar || "/placeholder.svg"} alt={user?.fullName} className="w-10 h-10 rounded-full" />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm text-foreground truncate">{user?.fullName}</p>
-              <p className="text-xs text-muted-foreground">⭐ {user?.rating || 0}</p>
             </div>
           </div>
           <Button variant="outline" className="w-full bg-transparent" onClick={handleLogout}>
@@ -83,3 +82,5 @@ export default function DriverLayout() {
     </div>
   )
 }
+
+

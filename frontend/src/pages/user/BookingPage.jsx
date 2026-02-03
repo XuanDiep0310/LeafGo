@@ -10,7 +10,16 @@ import {
   Polyline,
   useMap,
 } from "react-leaflet";
-import { AutoComplete, Card, Modal, Select, Button, message, Avatar, Rate } from "antd";
+import {
+  AutoComplete,
+  Card,
+  Modal,
+  Select,
+  Button,
+  message,
+  Avatar,
+  Rate,
+} from "antd";
 import { MapPin, Navigation, ArrowLeftRight, Crosshair } from "lucide-react";
 import {
   searchLocations,
@@ -49,7 +58,8 @@ import L from "leaflet";
 // Fix Leaflet marker icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
@@ -63,6 +73,41 @@ function MapUpdater({ center }) {
   }, [center, map]);
   return null;
 }
+
+// Thêm helper function ở đầu component
+const getDriverInfo = (driver) => {
+  if (!driver) return null;
+
+  console.log("Driver data:", driver); // Debug
+
+  return {
+    fullName: driver.fullName || driver.name || "N/A",
+    phone: driver.phoneNumber || driver.phone || "N/A",
+    avatar: driver.avatar || driver.avatarUrl || "",
+    rating: driver.averageRating || driver.rating || 0,
+    totalRides: driver.totalRides || driver.numberOfRides || 0,
+    licensePlate:
+      driver.vehicle?.licensePlate ||
+      driver.driverVehicle?.licensePlate ||
+      driver.licensePlate ||
+      "N/A",
+    brand:
+      driver.vehicle?.vehicleBrand ||
+      driver.vehicle?.brand ||
+      driver.vehicleBrand ||
+      "N/A",
+    model:
+      driver.vehicle?.vehicleModel ||
+      driver.vehicle?.model ||
+      driver.vehicleModel ||
+      "N/A",
+    color:
+      driver.vehicle?.vehicleColor ||
+      driver.vehicle?.color ||
+      driver.vehicleColor ||
+      "N/A",
+  };
+};
 
 export default function BookingPage() {
   const { user } = useSelector((state) => state.auth);
@@ -100,30 +145,36 @@ export default function BookingPage() {
   useEffect(() => {
     const initSignalR = async () => {
       try {
-        const conn = await startSignalRConnection(localStorage.getItem("accessToken"));
+        const conn = await startSignalRConnection(
+          localStorage.getItem("accessToken")
+        );
         if (!conn) {
-          console.warn("[BookingPage] SignalR not available, using polling fallback");
+          console.warn(
+            "[BookingPage] SignalR not available, using polling fallback"
+          );
           return;
         }
         console.log("[BookingPage] SignalR initialized");
 
         // Setup event listeners
-        onRideAccepted((data) => {
-          console.log("[BookingPage] Ride accepted:", data);
+        onRideAccepted(async (data) => {
+          console.log("[SignalR] Ride accepted:", data);
+
           setCurrentRideId(data.rideId);
-          setCurrentRide((prev) => ({
-            ...prev,
-            driver: data.driver,
-            status: "Accepted",
-          }));
-          // Join ride group to get real-time updates
-          joinRideGroup(data.rideId).catch(console.error);
+
+          // ✅ LẤY FULL RIDE
+          const fullRide = await getRideById(data.rideId);
+
+          setCurrentRide(fullRide);
+          setShowTripModal(true);
+
+          await joinRideGroup(data.rideId);
         });
 
         onRideStatusChanged((data) => {
           console.log("[BookingPage] Ride status changed:", data);
           setCurrentRide((prev) => ({
-            ...prev,
+            ...(prev || {}),
             status: data.status,
           }));
         });
@@ -178,6 +229,10 @@ export default function BookingPage() {
   useEffect(() => {
     loadVehicleTypes();
   }, []);
+  // Thêm useEffect để watch currentRide changes
+  useEffect(() => {
+    console.log("Current ride updated:", currentRide);
+  }, [currentRide]);
 
   const loadVehicleTypes = async () => {
     try {
@@ -187,23 +242,23 @@ export default function BookingPage() {
         setSelectedVehicleTypeId(types[0].id);
       }
     } catch (error) {
-      message.error('Không thể tải danh sách loại xe');
+      message.error("Không thể tải danh sách loại xe");
     }
   };
 
   const checkActiveRide = async () => {
     try {
       const activeRide = await getActiveRide();
+      console.log("Active ride loaded:", activeRide); // Debug
       if (activeRide) {
-        setCurrentRide(activeRide);
+        setCurrentRide(activeRide); // Ensure full object is set
         setShowTripModal(true);
-        // Join ride group to listen for real-time updates
         if (activeRide.id) {
           await joinRideGroup(activeRide.id);
         }
       }
     } catch (error) {
-      console.error('Error checking active ride:', error);
+      console.error("Error checking active ride:", error);
     }
   };
 
@@ -295,7 +350,7 @@ export default function BookingPage() {
 
   const fetchRoute = async () => {
     if (!pickupLocation || !dropoffLocation || !selectedVehicleTypeId) {
-      message.warning('Vui lòng chọn điểm đón, điểm đến và loại xe');
+      message.warning("Vui lòng chọn điểm đón, điểm đến và loại xe");
       return;
     }
 
@@ -305,7 +360,7 @@ export default function BookingPage() {
       const routeData = await getRoute(pickupLocation, dropoffLocation);
 
       if (!routeData || !routeData.coordinates || routeData.distance <= 0) {
-        message.error('Không thể tính toán tuyến đường');
+        message.error("Không thể tính toán tuyến đường");
         return;
       }
 
@@ -322,9 +377,9 @@ export default function BookingPage() {
       setPriceData(priceResult);
       setRouteConfirmed(true);
 
-      message.success('Đã xác nhận tuyến đường');
+      message.success("Đã xác nhận tuyến đường");
     } catch (error) {
-      message.error('Không thể tính toán giá: ' + error.message);
+      message.error("Không thể tính toán giá: " + error.message);
       setRouteConfirmed(false);
     } finally {
       setLoadingRoute(false);
@@ -333,7 +388,7 @@ export default function BookingPage() {
 
   const handleBooking = async () => {
     if (!routeConfirmed || !priceData) {
-      message.warning('Vui lòng xác nhận tuyến đường trước');
+      message.warning("Vui lòng xác nhận tuyến đường trước");
       return;
     }
 
@@ -350,14 +405,14 @@ export default function BookingPage() {
         distance: priceData.distance,
         estimatedDuration: priceData.estimatedDuration,
         estimatedPrice: priceData.estimatedPrice,
-        notes: ''
+        notes: "",
       };
 
       const result = await createRide(rideData);
       setCurrentRide(result);
       setCurrentRideId(result.id);
       setShowTripModal(true);
-      message.success('Đã tạo chuyến đi thành công');
+      message.success("Đã tạo chuyến đi thành công");
 
       // Join ride group to receive real-time updates
       if (result.id) {
@@ -369,7 +424,7 @@ export default function BookingPage() {
       setPriceData(null);
       setRoute(null);
     } catch (error) {
-      message.error('Không thể tạo chuyến đi: ' + error.message);
+      message.error("Không thể tạo chuyến đi: " + error.message);
     } finally {
       setLoadingBooking(false);
     }
@@ -379,14 +434,14 @@ export default function BookingPage() {
     if (!currentRide?.id) return;
 
     // Only allow cancelling if ride is in Pending status
-    if (currentRide.status !== 'Pending') {
-      message.warning('Chỉ có thể hủy chuyến khi đang tìm tài xế');
+    if (currentRide.status !== "Pending") {
+      message.warning("Chỉ có thể hủy chuyến khi đang tìm tài xế");
       return;
     }
 
     try {
-      await cancelRide(currentRide.id, 'Người dùng hủy chuyến');
-      message.success('Đã hủy chuyến đi');
+      await cancelRide(currentRide.id, "Người dùng hủy chuyến");
+      message.success("Đã hủy chuyến đi");
       if (currentRideId) {
         await leaveRideGroup(currentRideId);
       }
@@ -396,8 +451,8 @@ export default function BookingPage() {
       setDriverLocation(null);
     } catch (error) {
       // If ride is already cancelled, just close the modal
-      if (error.response?.data?.error?.includes('already cancelled')) {
-        message.info('Chuyến đã bị hủy');
+      if (error.response?.data?.error?.includes("already cancelled")) {
+        message.info("Chuyến đã bị hủy");
         if (currentRideId) {
           await leaveRideGroup(currentRideId).catch(console.error);
         }
@@ -406,21 +461,21 @@ export default function BookingPage() {
         setCurrentRideId(null);
         setDriverLocation(null);
       } else {
-        message.error('Không thể hủy chuyến: ' + error.message);
+        message.error("Không thể hủy chuyến: " + error.message);
       }
     }
   };
 
   const handleSubmitRating = async () => {
     if (rating === 0) {
-      message.warning('Vui lòng chọn đánh giá');
+      message.warning("Vui lòng chọn đánh giá");
       return;
     }
 
     try {
       await submitRating(currentRide.id, rating, ratingComment);
       setRatingSubmitted(true);
-      message.success('Cảm ơn bạn đã đánh giá!');
+      message.success("Cảm ơn bạn đã đánh giá!");
 
       setTimeout(() => {
         if (currentRideId) {
@@ -431,25 +486,25 @@ export default function BookingPage() {
         setCurrentRideId(null);
         setDriverLocation(null);
         setRating(0);
-        setRatingComment('');
+        setRatingComment("");
         setRatingSubmitted(false);
       }, 1500);
     } catch (error) {
-      message.error('Không thể gửi đánh giá: ' + error.message);
+      message.error("Không thể gửi đánh giá: " + error.message);
     }
   };
 
   const getStatusText = () => {
-    if (!currentRide) return '';
+    if (!currentRide) return "";
 
     const statusMap = {
-      'Pending': 'Đang tìm tài xế...',
-      'Accepted': 'Đã tìm thấy tài xế',
-      'DriverArriving': 'Tài xế đang đến',
-      'DriverArrived': 'Tài xế đã đến',
-      'InProgress': 'Đang di chuyển',
-      'Completed': 'Hoàn thành',
-      'Cancelled': 'Đã hủy'
+      Pending: "Đang tìm tài xế...",
+      Accepted: "Đã tìm thấy tài xế",
+      DriverArriving: "Tài xế đang đến",
+      DriverArrived: "Tài xế đã đến",
+      InProgress: "Đang di chuyển",
+      Completed: "Hoàn thành",
+      Cancelled: "Đã hủy",
     };
 
     return statusMap[currentRide.status] || currentRide.status;
@@ -463,7 +518,9 @@ export default function BookingPage() {
 
         {/* Vehicle Type */}
         <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">Loại phương tiện</label>
+          <label className="block text-sm font-medium mb-2">
+            Loại phương tiện
+          </label>
           <Select
             value={selectedVehicleTypeId}
             onChange={setSelectedVehicleTypeId}
@@ -548,11 +605,20 @@ export default function BookingPage() {
           <Button
             type={routeConfirmed ? "default" : "primary"}
             onClick={fetchRoute}
-            disabled={!pickupLocation || !dropoffLocation || loadingRoute || routeConfirmed}
+            disabled={
+              !pickupLocation ||
+              !dropoffLocation ||
+              loadingRoute ||
+              routeConfirmed
+            }
             className="flex-1"
             size="large"
           >
-            {loadingRoute ? "Đang tính..." : routeConfirmed ? "✓ Đã xác nhận" : "Xác nhận"}
+            {loadingRoute
+              ? "Đang tính..."
+              : routeConfirmed
+              ? "✓ Đã xác nhận"
+              : "Xác nhận"}
           </Button>
           {routeConfirmed && (
             <Button
@@ -574,11 +640,15 @@ export default function BookingPage() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span>Khoảng cách</span>
-                <span className="font-semibold">{priceData.distance.toFixed(1)} km</span>
+                <span className="font-semibold">
+                  {priceData.distance.toFixed(1)} km
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Thời gian</span>
-                <span className="font-semibold">{priceData.estimatedDuration} phút</span>
+                <span className="font-semibold">
+                  {priceData.estimatedDuration} phút
+                </span>
               </div>
               <div className="flex justify-between pt-2 border-t">
                 <span>Giá dự kiến</span>
@@ -623,7 +693,11 @@ export default function BookingPage() {
             </Marker>
           )}
           {route?.coordinates && (
-            <Polyline positions={route.coordinates} color="#10b981" weight={4} />
+            <Polyline
+              positions={route.coordinates}
+              color="#10b981"
+              weight={4}
+            />
           )}
         </MapContainer>
       </div>
@@ -633,25 +707,35 @@ export default function BookingPage() {
         title="Trạng thái chuyến đi"
         open={showTripModal}
         footer={null}
-        closable={currentRide?.status === 'Completed' || currentRide?.status === 'Cancelled'}
+        closable={
+          currentRide?.status === "Completed" ||
+          currentRide?.status === "Cancelled"
+        }
         onCancel={() => {
-          if (currentRide?.status === 'Completed' || currentRide?.status === 'Cancelled') {
+          if (
+            currentRide?.status === "Completed" ||
+            currentRide?.status === "Cancelled"
+          ) {
             setShowTripModal(false);
             setCurrentRide(null);
           }
         }}
         width={400}
       >
-        {currentRide?.status === 'Completed' && !ratingSubmitted ? (
+        {currentRide?.status === "Completed" && !ratingSubmitted ? (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-center">Đánh giá chuyến đi</h3>
+            <h3 className="text-lg font-semibold text-center">
+              Đánh giá chuyến đi
+            </h3>
 
             {currentRide.driver && (
               <Card>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Tài xế:</span>
-                    <span className="font-semibold">{currentRide.driver.fullName}</span>
+                    <span className="font-semibold">
+                      {currentRide.driver.fullName}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Đánh giá:</span>
@@ -662,7 +746,9 @@ export default function BookingPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-2">Chất lượng dịch vụ</label>
+              <label className="block text-sm font-medium mb-2">
+                Chất lượng dịch vụ
+              </label>
               <div className="flex justify-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
@@ -713,7 +799,9 @@ export default function BookingPage() {
                       size={48}
                       src={
                         currentRide.driver.avatar
-                          ? `${import.meta.env.VITE_API_URL}${currentRide.driver.avatar}`
+                          ? `${import.meta.env.VITE_API_URL}${
+                              currentRide.driver.avatar
+                            }`
                           : undefined
                       }
                     >
@@ -721,10 +809,14 @@ export default function BookingPage() {
                     </Avatar>
                     <div className="flex-1">
                       <div className="font-semibold">
-                        {currentRide.driver.fullName || currentRide.driver.name || 'N/A'}
+                        {currentRide.driver.fullName ||
+                          currentRide.driver.name ||
+                          "N/A"}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {currentRide.driver.phoneNumber || currentRide.driver.phone || 'N/A'}
+                        {currentRide.driver.phoneNumber ||
+                          currentRide.driver.phone ||
+                          "N/A"}
                       </div>
                     </div>
                     <div className="text-right">
@@ -735,7 +827,8 @@ export default function BookingPage() {
                         style={{ fontSize: 14 }}
                       />
                       <div className="text-xs text-gray-500 mt-1">
-                        {(currentRide.driver.totalRides || 0).toLocaleString()} chuyến
+                        {(currentRide.driver.totalRides || 0).toLocaleString()}{" "}
+                        chuyến
                       </div>
                     </div>
                   </div>
@@ -745,28 +838,34 @@ export default function BookingPage() {
                       <span className="text-gray-600">Biển số</span>
                       <span className="font-semibold text-blue-600">
                         {currentRide.driver.vehicle?.licensePlate ||
-                         currentRide.driver.driverVehicle?.licensePlate ||
-                         currentRide.vehicle?.licensePlate ||
-                         currentRide.licensePlate ||
-                         "N/A"}
+                          currentRide.driver.driverVehicle?.licensePlate ||
+                          currentRide.vehicle?.licensePlate ||
+                          currentRide.licensePlate ||
+                          "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Hãng xe</span>
                       <span className="font-medium">
-                        {currentRide.driver.vehicle?.vehicleBrand || currentRide.driver.vehicle?.brand || 'N/A'}
+                        {currentRide.driver.vehicle?.vehicleBrand ||
+                          currentRide.driver.vehicle?.brand ||
+                          "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Dòng xe</span>
                       <span className="font-medium">
-                        {currentRide.driver.vehicle?.vehicleModel || currentRide.driver.vehicle?.model || 'N/A'}
+                        {currentRide.driver.vehicle?.vehicleModel ||
+                          currentRide.driver.vehicle?.model ||
+                          "N/A"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Màu xe</span>
                       <span className="font-medium">
-                        {currentRide.driver.vehicle?.vehicleColor || currentRide.driver.vehicle?.color || 'N/A'}
+                        {currentRide.driver.vehicle?.vehicleColor ||
+                          currentRide.driver.vehicle?.color ||
+                          "N/A"}
                       </span>
                     </div>
                   </div>
@@ -774,12 +873,8 @@ export default function BookingPage() {
               </Card>
             )}
 
-            {currentRide?.status === 'Pending' && (
-              <Button
-                onClick={handleCancelRide}
-                className="w-full mt-4"
-                danger
-              >
+            {currentRide?.status === "Pending" && (
+              <Button onClick={handleCancelRide} className="w-full mt-4" danger>
                 Hủy chuyến
               </Button>
             )}
