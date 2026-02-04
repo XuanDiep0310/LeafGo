@@ -125,7 +125,7 @@ function ProfilePageContent() {
         updateProfile({
           userId: user.id,
           profileData: values,
-        }),
+        })
       ).unwrap();
 
       message.success("Cập nhật thông tin thành công");
@@ -167,7 +167,7 @@ function ProfilePageContent() {
       passwordForm.resetFields();
     } catch (error) {
       message.error(
-        error.response?.data?.error || error.message || "Đổi mật khẩu thất bại",
+        error.response?.data?.error || error.message || "Đổi mật khẩu thất bại"
       );
     }
   };
@@ -175,30 +175,37 @@ function ProfilePageContent() {
   const handleAvatarUpload = async (file) => {
     try {
       setUploading(true);
+  
       const response = await uploadAvatar(file);
-      // Extract avatarUrl from nested response structure
-      let avatarUrl = response?.data?.avatarUrl || response?.avatarUrl;
-
-      if (avatarUrl) {
-        // Convert relative path to full URL
-        if (avatarUrl.startsWith("/")) {
-          avatarUrl = `${import.meta.env.VITE_API_URL}${avatarUrl}`;
-        }
-        setAvatar(avatarUrl);
-
-        // Update Redux store with full user object
-        const updatedUser = { ...user, avatar: avatarUrl };
-        dispatch(setUser(updatedUser));
-
-        message.success("Cập nhật ảnh đại diện thành công");
-      }
+      const avatarUrl = response?.data?.avatarUrl || response?.avatarUrl;
+  
+      if (!avatarUrl) throw new Error("No avatar returned");
+  
+      // 👉 luôn ép về RELATIVE
+      const relativeAvatar = avatarUrl.startsWith("http")
+        ? avatarUrl.replace(import.meta.env.VITE_API_URL, "")
+        : avatarUrl;
+  
+      // 👉 preview (FULL)
+      setAvatar(`${import.meta.env.VITE_API_URL}${relativeAvatar}`);
+  
+      // 👉 redux (RELATIVE)
+      dispatch(
+        setUser({
+          ...user,
+          avatar: relativeAvatar,
+        })
+      );
+  
+      message.success("Cập nhật ảnh đại diện thành công");
     } catch (error) {
-      message.error("Không thể tải ảnh lên");
       console.error("Upload error:", error);
+      message.error("Không thể tải ảnh lên");
     } finally {
       setUploading(false);
     }
-    return false; // Prevent default upload
+  
+    return false;
   };
 
   const tabItems = [

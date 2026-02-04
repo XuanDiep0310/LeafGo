@@ -82,11 +82,11 @@ export default function AdminTripsPage() {
 
   const getStatusText = (status) => {
     const texts = {
-      Completed: "✅ Hoàn thành",
-      Cancelled: "❌ Đã hủy",
-      InProgress: "🚗 Đang đi",
-      Pending: "⏳ Chờ xử lý",
-      Requested: "🔍 Đang tìm",
+      Completed: "Hoàn thành",
+      Cancelled: "Đã hủy",
+      InProgress: "Đang đi",
+      Pending: "Chờ xử lý",
+      Requested: "Đang tìm",
     };
     return texts[status] || status;
   };

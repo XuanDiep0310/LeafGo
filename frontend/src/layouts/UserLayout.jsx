@@ -1,25 +1,41 @@
-"use client"
+"use client";
 
-import { Outlet, Link, useLocation } from "react-router-dom"
-import { useDispatch, useSelector } from "react-redux"
-import { logout } from "../store/slices/authSlice"
-import { Home, History, User, LogOut, Leaf } from "lucide-react"
-import { Button } from "antd"
+import { useEffect } from "react";
+import { Outlet, Link, useLocation } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { logout } from "../store/slices/authSlice";
+import { Home, History, User, LogOut, Leaf } from "lucide-react";
+import { Button } from "antd";
 
 export default function UserLayout() {
-  const location = useLocation()
-  const dispatch = useDispatch()
-  const { user } = useSelector((state) => state.auth)
+  const location = useLocation();
+  const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
+  //  Debug: log xem user.avatar có value không
+  useEffect(() => {
+    console.log(" User from Redux:", user);
+    console.log("Avatar:", user?.avatar);
+  }, [user]);
 
   const menuItems = [
     { path: "/user/booking", icon: Home, label: "Đặt xe" },
     { path: "/user/history", icon: History, label: "Lịch sử" },
     { path: "/user/profile", icon: User, label: "Tài khoản" },
-  ]
+  ];
 
   const handleLogout = () => {
-    dispatch(logout())
-  }
+    dispatch(logout());
+  };
+
+  // Helper function: Build full avatar URL
+  const getAvatarUrl = (avatar) => {
+    if (!avatar) return "/placeholder.svg";
+    // Nếu đã là full URL
+    if (avatar.startsWith("http")) return avatar;
+    // Nếu là relative path, thêm base URL
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
+    return `${baseUrl}${avatar.startsWith("/") ? avatar : "/" + avatar}`;
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -40,8 +56,8 @@ export default function UserLayout() {
         <nav className="flex-1 p-4">
           <ul className="space-y-2">
             {menuItems.map((item) => {
-              const Icon = item.icon
-              const isActive = location.pathname === item.path
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
               return (
                 <li key={item.path}>
                   <Link
@@ -56,20 +72,35 @@ export default function UserLayout() {
                     <span className="font-medium">{item.label}</span>
                   </Link>
                 </li>
-              )
+              );
             })}
           </ul>
         </nav>
 
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3 mb-4 px-2">
-            <img src={user?.avatar || "/placeholder.svg"} alt={user?.fullName} className="w-10 h-10 rounded-full" />
+            <img
+              src={getAvatarUrl(user?.avatar)}
+              alt={user?.fullName}
+              className="w-10 h-10 rounded-full object-cover bg-gray-200"
+              onError={(e) => {
+                e.target.src = "/placeholder.svg";
+              }}
+            />
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm text-foreground truncate">{user?.fullName}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              <p className="font-medium text-sm text-foreground truncate">
+                {user?.fullName}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {user?.email}
+              </p>
             </div>
           </div>
-          <Button variant="outline" className="w-full bg-transparent" onClick={handleLogout}>
+          <Button
+            variant="outline"
+            className="w-full bg-transparent"
+            onClick={handleLogout}
+          >
             <LogOut className="w-4 h-4 mr-2" />
             Đăng xuất
           </Button>
@@ -81,5 +112,5 @@ export default function UserLayout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }
