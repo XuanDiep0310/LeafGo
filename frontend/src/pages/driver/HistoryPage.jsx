@@ -1,7 +1,16 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Card, Empty, Tag, Pagination, message, DatePicker, Select } from "antd"
+import { formatUtcToLocal } from "../../utils/date";
+import { useEffect, useState } from "react";
+import {
+  Card,
+  Empty,
+  Tag,
+  Pagination,
+  message,
+  DatePicker,
+  Select,
+} from "antd";
 import {
   Calendar,
   MapPin,
@@ -10,69 +19,70 @@ import {
   Star,
   User,
   Phone,
-} from "lucide-react"
-import { getRideHistory } from "../../services/driverService"
-import { format } from "date-fns"
-import { vi } from "date-fns/locale"
+} from "lucide-react";
+import { getRideHistory } from "../../services/driverService";
+import { format } from "date-fns";
+import { vi } from "date-fns/locale";
 
-const { RangePicker } = DatePicker
-const { Option } = Select
+const { RangePicker } = DatePicker;
+const { Option } = Select;
 
 export default function DriverHistoryPage() {
-  const [trips, setTrips] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [trips, setTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
     total: 0,
-  })
+  });
   const [filters, setFilters] = useState({
     status: null,
     dateRange: null,
-  })
+  });
 
   useEffect(() => {
-    fetchHistory()
-  }, [pagination.current, pagination.pageSize, filters])
+    fetchHistory();
+  }, [pagination.current, pagination.pageSize, filters]);
 
   const fetchHistory = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
       const params = {
         Page: pagination.current,
         PageSize: pagination.pageSize,
-      }
+      };
 
       if (filters.status) {
-        params.Status = filters.status
+        params.Status = filters.status;
       }
 
       if (filters.dateRange && filters.dateRange.length === 2) {
-        params.FromDate = filters.dateRange[0].toISOString()
-        params.ToDate = filters.dateRange[1].toISOString()
+        params.FromDate = filters.dateRange[0].toISOString();
+        params.ToDate = filters.dateRange[1].toISOString();
       }
 
-      const response = await getRideHistory(params)
+      const response = await getRideHistory(params);
 
       // Handle both direct data and wrapped response
-      const items = response.data?.items || response.items || []
+      const items = response.data?.items || response.items || [];
       if (!items || items.length === 0) {
-        setTrips([])
+        setTrips([]);
         setPagination({
           ...pagination,
           total: 0,
-        })
-        return
+        });
+        return;
       }
 
       const mappedTrips = items.map((ride) => {
         // Validate and parse date
-        const dateStr = ride.requestTime || ride.createdAt || new Date().toISOString()
-        const parsedDate = new Date(dateStr)
-        const validDate = isNaN(parsedDate.getTime()) ? new Date() : parsedDate
+        // const dateStr =
+        //   ride.requestTime || ride.createdAt || new Date().toISOString();
+        // const parsedDate = new Date(dateStr);
+        // const validDate = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
         return {
           id: ride.id,
-          createdAt: validDate,
+          createdAt: ride.requestedAt, // GIỮ UTC
           userId: ride.user.id,
           customerName: ride.user.fullName || "Khách hàng",
           customerPhone: ride.user.phoneNumber || "",
@@ -82,7 +92,10 @@ export default function DriverHistoryPage() {
             lng: ride.pickupLongitude || 0,
           },
           dropoffLocation: {
-            address: ride.dropoffAddress || ride.destinationAddress || "Chưa có địa chỉ",
+            address:
+              ride.dropoffAddress ||
+              ride.destinationAddress ||
+              "Chưa có địa chỉ",
             lat: ride.dropoffLatitude || ride.destinationLatitude || 0,
             lng: ride.dropoffLongitude || ride.destinationLongitude || 0,
           },
@@ -91,52 +104,52 @@ export default function DriverHistoryPage() {
           status: ride.status,
           rating: ride.rating?.rating || 0,
           comment: ride.rating?.comment || "",
-        }
-      })
+        };
+      });
 
-      setTrips(mappedTrips)
-      const totalCount = response.data?.totalCount || response.totalCount || 0
+      setTrips(mappedTrips);
+      const totalCount = response.data?.totalCount || response.totalCount || 0;
       setPagination({
         ...pagination,
         total: totalCount,
-      })
+      });
     } catch (error) {
-      console.error("Error fetching history:", error)
-      message.error("Không thể tải lịch sử chuyến đi")
+      console.error("Error fetching history:", error);
+      message.error("Không thể tải lịch sử chuyến đi");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handlePageChange = (page, pageSize) => {
     setPagination({
       ...pagination,
       current: page,
       pageSize: pageSize,
-    })
-  }
+    });
+  };
 
   const handleStatusChange = (value) => {
     setFilters({
       ...filters,
       status: value,
-    })
+    });
     setPagination({
       ...pagination,
       current: 1,
-    })
-  }
+    });
+  };
 
   const handleDateRangeChange = (dates) => {
     setFilters({
       ...filters,
       dateRange: dates,
-    })
+    });
     setPagination({
       ...pagination,
       current: 1,
-    })
-  }
+    });
+  };
 
   if (loading && trips.length === 0) {
     return (
@@ -146,7 +159,7 @@ export default function DriverHistoryPage() {
           <p className="text-muted-foreground">Đang tải...</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -190,15 +203,9 @@ export default function DriverHistoryPage() {
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                      {(() => {
-                        try {
-                          const date = trip.createdAt instanceof Date ? trip.createdAt : new Date(trip.createdAt)
-                          return isNaN(date.getTime()) ? "Ngày không xác định" : format(date, "dd/MM/yyyy HH:mm", { locale: vi })
-                        } catch (e) {
-                          return "Ngày không xác định"
-                        }
-                      })()}
-                    </span>
+  {formatUtcToLocal(trip.createdAt)}
+</span>
+
                   </div>
                   <Tag color={trip.status === "Completed" ? "green" : "red"}>
                     {trip.status === "Completed" ? "Hoàn thành" : "Đã hủy"}
@@ -263,10 +270,11 @@ export default function DriverHistoryPage() {
                         {[...Array(5)].map((_, i) => (
                           <Star
                             key={i}
-                            className={`w-4 h-4 ${i < trip.rating
-                              ? "text-yellow-400 fill-yellow-400"
-                              : "text-gray-300"
-                              }`}
+                            className={`w-4 h-4 ${
+                              i < trip.rating
+                                ? "text-yellow-400 fill-yellow-400"
+                                : "text-gray-300"
+                            }`}
                           />
                         ))}
                       </div>
@@ -302,5 +310,5 @@ export default function DriverHistoryPage() {
         </>
       )}
     </div>
-  )
+  );
 }
