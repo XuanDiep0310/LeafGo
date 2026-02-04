@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { Outlet, Link, useLocation } from "react-router-dom"
 import { useDispatch, useSelector } from "react-redux"
 import { logout } from "../store/slices/authSlice"
@@ -21,6 +22,14 @@ export default function AdminLayout() {
 
   const handleLogout = () => {
     dispatch(logout())
+  }
+
+  // Helper: Build full avatar URL
+  const getAvatarUrl = (avatar) => {
+    if (!avatar) return "/placeholder.svg"
+    if (avatar.startsWith("http")) return avatar
+    const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:5000"
+    return `${baseUrl}${avatar.startsWith("/") ? avatar : "/" + avatar}`
   }
 
   return (
@@ -62,17 +71,23 @@ export default function AdminLayout() {
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-3 mb-4 px-2">
-            <img src={user?.avatar || "/placeholder.svg"} alt={user?.fullName} className="w-10 h-10 rounded-full" />
+        <div className="p-4 border-t">
+          <div className="flex items-center gap-3 mb-4">
+            <img
+              src={getAvatarUrl(user?.avatar)}
+              alt={user?.fullName}
+              className="w-10 h-10 rounded-full object-cover bg-gray-200"
+              onError={(e) => {
+                e.target.src = "/placeholder.svg"
+              }}
+            />
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm text-foreground truncate">{user?.fullName}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              <p className="font-medium text-sm truncate">{user?.fullName}</p>
+              <p className="text-xs text-gray-500 truncate">{user?.email}</p>
             </div>
           </div>
-          <Button variant="outline" className="w-full bg-transparent" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Đăng xuất
+          <Button onClick={() => dispatch(logout())} className="w-full">
+            Logout
           </Button>
         </div>
       </aside>
