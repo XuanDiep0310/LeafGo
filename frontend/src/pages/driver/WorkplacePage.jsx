@@ -1,8 +1,11 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useSelector } from "react-redux"
-import { Card, Switch, Modal, Tag, List, Button, App } from "antd"
+
+import { formatUtcToLocal } from "../../utils/date";
+
+import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
+import { Card, Switch, Modal, Tag, List, Button, App } from "antd";
 import {
   Power,
   Bell,
@@ -13,7 +16,7 @@ import {
   User,
   Clock,
   Settings,
-} from "lucide-react"
+} from "lucide-react";
 import {
   toggleDriverOnline,
   getPendingRides,
@@ -22,7 +25,7 @@ import {
   updateRideStatus,
   updateDriverLocation,
   getDriverVehicle,
-} from "../../services/driverService"
+} from "../../services/driverService";
 import {
   startSignalRConnection,
   joinRideGroup,
@@ -31,270 +34,284 @@ import {
   onRideStatusChanged,
   offNewRideRequest,
   offRideStatusChanged,
-} from "../../services/signalRService"
-import { format } from "date-fns"
-import { vi } from "date-fns/locale"
-import VehicleConfigModal from "../../components/VehicleConfigModal"
+} from "../../services/signalRService";
+import { format } from "date-fns";
+import { vi } from "date-fns/locale";
+import VehicleConfigModal from "../../components/VehicleConfigModal";
 
 function WorkplacePageContent() {
-  const { user } = useSelector((state) => state.auth)
-  const { message } = App.useApp()
-  const [isOnline, setIsOnline] = useState(false)
-  const [currentTrip, setCurrentTrip] = useState(null)
-  const [pendingTrips, setPendingTrips] = useState([])
-  const [showIncomingModal, setShowIncomingModal] = useState(false)
-  const [selectedTrip, setSelectedTrip] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const { user } = useSelector((state) => state.auth);
+  const { message } = App.useApp();
+  const [isOnline, setIsOnline] = useState(false);
+  const [currentTrip, setCurrentTrip] = useState(null);
+  const [pendingTrips, setPendingTrips] = useState([]);
+  const [showIncomingModal, setShowIncomingModal] = useState(false);
+  const [selectedTrip, setSelectedTrip] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   // Vehicle-related states
-  const [hasVehicle, setHasVehicle] = useState(false)
-  const [showVehicleModal, setShowVehicleModal] = useState(false)
-  const [checkingVehicle, setCheckingVehicle] = useState(true)
+  const [hasVehicle, setHasVehicle] = useState(false);
+  const [showVehicleModal, setShowVehicleModal] = useState(false);
+  const [checkingVehicle, setCheckingVehicle] = useState(true);
 
   // Initialize SignalR connection on mount
   useEffect(() => {
     const initSignalR = async () => {
       try {
-        const conn = await startSignalRConnection(localStorage.getItem("accessToken"))
+        const conn = await startSignalRConnection(
+          localStorage.getItem("accessToken")
+        );
         if (!conn) {
-          console.warn("[WorkplacePage] SignalR not available, using polling fallback")
-          return
+          console.warn(
+            "[WorkplacePage] SignalR not available, using polling fallback"
+          );
+          return;
         }
-        console.log("[WorkplacePage] SignalR initialized")
+        console.log("[WorkplacePage] SignalR initialized");
 
         // Setup event listeners
         onNewRideRequest((data) => {
-          console.log("[WorkplacePage] New ride request:", data)
-          loadPendingRides()
-        })
+          console.log("[WorkplacePage] New ride request:", data);
+          loadPendingRides();
+        });
 
         onRideStatusChanged((data) => {
-          console.log("[WorkplacePage] Ride status changed:", data)
+          console.log("[WorkplacePage] Ride status changed:", data);
           if (currentTrip?.id === data.rideId) {
             setCurrentTrip((prev) => ({
               ...prev,
               status: data.status,
-            }))
+            }));
           }
-        })
+        });
       } catch (error) {
-        console.error("[WorkplacePage] Failed to initialize SignalR:", error)
-        console.warn("[WorkplacePage] Continuing without SignalR connection")
+        console.error("[WorkplacePage] Failed to initialize SignalR:", error);
+        console.warn("[WorkplacePage] Continuing without SignalR connection");
       }
-    }
+    };
 
-    initSignalR()
+    initSignalR();
 
     // Cleanup on unmount
     return () => {
-      offNewRideRequest()
-      offRideStatusChanged()
-    }
-  }, [])
+      offNewRideRequest();
+      offRideStatusChanged();
+    };
+  }, []);
 
   useEffect(() => {
     // Restore online status from localStorage when component mounts
-    const savedOnlineStatus = localStorage.getItem('driverOnlineStatus')
-    if (savedOnlineStatus === 'true') {
-      setIsOnline(true)
-      console.log('[WorkplacePage] Restored online status from localStorage')
+    const savedOnlineStatus = localStorage.getItem("driverOnlineStatus");
+    if (savedOnlineStatus === "true") {
+      setIsOnline(true);
+      console.log("[WorkplacePage] Restored online status from localStorage");
     }
 
-    loadCurrentRide()
-    getCurrentLocation()
-    checkVehicleInfo()
-  }, [])
+    loadCurrentRide();
+    getCurrentLocation();
+    checkVehicleInfo();
+  }, []);
 
   // Poll for pending rides when online (keep as backup for initial load)
   useEffect(() => {
-    let interval
+    let interval;
     if (isOnline && !currentTrip) {
-      console.log('[WorkplacePage] Starting to poll for pending rides...')
-      loadPendingRides() // Load immediately
+      console.log("[WorkplacePage] Starting to poll for pending rides...");
+      loadPendingRides(); // Load immediately
       interval = setInterval(() => {
-        console.log('[WorkplacePage] Polling for pending rides...')
-        loadPendingRides()
-      }, 10000) // Poll every 10 seconds as backup
+        console.log("[WorkplacePage] Polling for pending rides...");
+        loadPendingRides();
+      }, 10000); // Poll every 10 seconds as backup
     }
     return () => {
       if (interval) {
-        console.log('[WorkplacePage] Stopping poll')
-        clearInterval(interval)
+        console.log("[WorkplacePage] Stopping poll");
+        clearInterval(interval);
       }
-    }
-  }, [isOnline, currentTrip])
+    };
+  }, [isOnline, currentTrip]);
 
   const checkVehicleInfo = async () => {
     try {
-      setCheckingVehicle(true)
-      const response = await getDriverVehicle()
-      console.log("Vehicle check response:", response)
+      setCheckingVehicle(true);
+      const response = await getDriverVehicle();
+      console.log("Vehicle check response:", response);
 
       // Check if vehicle exists and has required data
-      const hasValidVehicle = response?.success && response?.data?.id
-      setHasVehicle(hasValidVehicle)
+      const hasValidVehicle = response?.success && response?.data?.id;
+      setHasVehicle(hasValidVehicle);
 
       if (!hasValidVehicle) {
-        console.log("No vehicle configured")
+        console.log("No vehicle configured");
       } else {
-        console.log("Vehicle configured:", response.data)
+        console.log("Vehicle configured:", response.data);
       }
     } catch (error) {
-      console.error("Error checking vehicle:", error)
-      setHasVehicle(false)
+      console.error("Error checking vehicle:", error);
+      setHasVehicle(false);
     } finally {
-      setCheckingVehicle(false)
+      setCheckingVehicle(false);
     }
-  }
+  };
 
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          console.log('[WorkplacePage] Current location:', {
+          console.log("[WorkplacePage] Current location:", {
             lat: position.coords.latitude,
-            lng: position.coords.longitude
-          })
+            lng: position.coords.longitude,
+          });
           updateDriverLocation(
             position.coords.latitude,
             position.coords.longitude
-          ).catch(console.error)
+          ).catch(console.error);
         },
         (error) => console.error("Error getting location:", error)
-      )
+      );
     }
-  }
+  };
 
   const loadCurrentRide = async () => {
     try {
-      console.log('[WorkplacePage] Loading current ride...')
-      const response = await getCurrentRide()
-      console.log('[WorkplacePage] Current ride response:', response)
+      console.log("[WorkplacePage] Loading current ride...");
+      const response = await getCurrentRide();
+      console.log("[WorkplacePage] Current ride response:", response);
 
       // Handle different response formats
-      let ride = null
+      let ride = null;
       if (response?.data) {
-        ride = response.data
+        ride = response.data;
       } else if (response) {
-        ride = response
+        ride = response;
       }
 
-      console.log('[WorkplacePage] Extracted ride:', ride)
+      console.log("[WorkplacePage] Extracted ride:", ride);
 
       if (ride && ride.id) {
-        const mappedTrip = mapRideToTrip(ride)
-        console.log('[WorkplacePage] Mapped trip:', mappedTrip)
-        setCurrentTrip(mappedTrip)
+        const mappedTrip = mapRideToTrip(ride);
+        console.log("[WorkplacePage] Mapped trip:", mappedTrip);
+        setCurrentTrip(mappedTrip);
       } else {
-        console.log('[WorkplacePage] No active ride found')
-        setCurrentTrip(null)
+        console.log("[WorkplacePage] No active ride found");
+        setCurrentTrip(null);
       }
     } catch (error) {
-      console.error("Error loading current ride:", error)
-      setCurrentTrip(null)
+      console.error("Error loading current ride:", error);
+      setCurrentTrip(null);
     }
-  }
+  };
 
   const loadPendingRides = async () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
-            console.log('[WorkplacePage] Fetching pending rides at location:', {
+            console.log("[WorkplacePage] Fetching pending rides at location:", {
               lat: position.coords.latitude,
-              lng: position.coords.longitude
-            })
+              lng: position.coords.longitude,
+            });
 
             const response = await getPendingRides(
               position.coords.latitude,
               position.coords.longitude,
               10 // Increase radius to 10km
-            )
+            );
 
-            console.log('[WorkplacePage] getPendingRides response:', response)
+            console.log("[WorkplacePage] getPendingRides response:", response);
 
             // Handle different response structures
-            let rides = []
+            let rides = [];
 
             // Case 1: response.data.data (ApiResponse wrapper with nested data)
             if (response?.data?.data && Array.isArray(response.data.data)) {
-              rides = response.data.data
+              rides = response.data.data;
             }
             // Case 2: response.data (ApiResponse wrapper)
             else if (response?.data && Array.isArray(response.data)) {
-              rides = response.data
+              rides = response.data;
             }
             // Case 3: Direct array response
             else if (Array.isArray(response)) {
-              rides = response
+              rides = response;
             }
 
-            console.log('[WorkplacePage] Extracted rides array:', rides)
+            console.log("[WorkplacePage] Extracted rides array:", rides);
 
             if (rides.length > 0) {
-              const mappedTrips = rides.map(mapRideToTrip)
-              console.log('[WorkplacePage] Mapped trips:', mappedTrips)
-              setPendingTrips(mappedTrips)
+              const mappedTrips = rides.map(mapRideToTrip);
+              console.log("[WorkplacePage] Mapped trips:", mappedTrips);
+              setPendingTrips(mappedTrips);
               // Auto-open modal for first pending ride
               if (!showIncomingModal && mappedTrips.length > 0) {
-                setSelectedTrip(mappedTrips[0])
-                setShowIncomingModal(true)
+                setSelectedTrip(mappedTrips[0]);
+                setShowIncomingModal(true);
               }
-              message.info(`Có ${rides.length} yêu cầu đặt xe mới`, 2)
+              message.info(`Có ${rides.length} yêu cầu đặt xe mới`, 2);
             } else {
-              console.log('[WorkplacePage] No pending rides found')
-              setPendingTrips([])
+              console.log("[WorkplacePage] No pending rides found");
+              setPendingTrips([]);
             }
           } catch (error) {
-            console.error("[WorkplacePage] Error loading pending rides:", error)
+            console.error(
+              "[WorkplacePage] Error loading pending rides:",
+              error
+            );
             console.error("[WorkplacePage] Error details:", {
               message: error.message,
               response: error.response?.data,
-              status: error.response?.status
-            })
+              status: error.response?.status,
+            });
           }
         },
         (error) => {
-          console.error("Error getting location:", error)
-          message.error("Không thể lấy vị trí hiện tại")
+          console.error("Error getting location:", error);
+          message.error("Không thể lấy vị trí hiện tại");
         },
         {
           enableHighAccuracy: true,
           timeout: 10000,
-          maximumAge: 0
+          maximumAge: 0,
         }
-      )
+      );
     } else {
-      message.error("Trình duyệt không hỗ trợ định vị")
+      message.error("Trình duyệt không hỗ trợ định vị");
     }
-  }
+  };
 
   const mapRideToTrip = (ride) => {
-    console.log('[WorkplacePage] Mapping ride to trip:', ride)
+    console.log("[WorkplacePage] Mapping ride to trip:", ride);
 
     // Extract actual ride data if nested
-    const rideData = ride.data || ride
+    const rideData = ride.data || ride;
 
     // Normalize status: convert API status to internal format
-    let status = (rideData.status?.toLowerCase() || 'pending').trim()
+    let status = (rideData.status?.toLowerCase() || "pending").trim();
     // Handle different status formats from API
     const statusMap = {
-      'inprogress': 'in_progress',
-      'driverarriving': 'arriving',
-      'driverarrived': 'arrived',
-    }
-    status = statusMap[status] || status
+      inprogress: "in_progress",
+      driverarriving: "arriving",
+      driverarrived: "arrived",
+    };
+    status = statusMap[status] || status;
 
     const mapped = {
       id: rideData.id,
-      createdAt: rideData.requestTime || rideData.requestedAt || rideData.createdAt || new Date().toISOString(),
+      createdAt:
+        rideData.requestTime ||
+        rideData.requestedAt ||
+        rideData.createdAt ||
+        new Date().toISOString(),
       pickupLocation: {
-        address: rideData.pickupAddress || 'Chưa có địa chỉ',
+        address: rideData.pickupAddress || "Chưa có địa chỉ",
         lat: rideData.pickupLatitude || 0,
         lng: rideData.pickupLongitude || 0,
       },
       dropoffLocation: {
-        address: rideData.dropoffAddress || rideData.destinationAddress || 'Chưa có địa chỉ',
+        address:
+          rideData.dropoffAddress ||
+          rideData.destinationAddress ||
+          "Chưa có địa chỉ",
         lat: rideData.dropoffLatitude || rideData.destinationLatitude || 0,
         lng: rideData.dropoffLongitude || rideData.destinationLongitude || 0,
       },
@@ -304,132 +321,142 @@ function WorkplacePageContent() {
       customerPhone: rideData.user.phoneNumber || "",
       status: status,
       version: rideData.version || 0,
-    }
+    };
 
-    console.log('[WorkplacePage] Mapped trip:', mapped)
-    return mapped
-  }
+    console.log("[WorkplacePage] Mapped trip:", mapped);
+    return mapped;
+  };
 
   const handleToggleOnline = async (checked) => {
     // Check if trying to go online without vehicle
     if (checked && !hasVehicle) {
-      message.warning("Vui lòng cấu hình thông tin xe trước khi online")
-      setShowVehicleModal(true)
-      return
+      message.warning("Vui lòng cấu hình thông tin xe trước khi online");
+      setShowVehicleModal(true);
+      return;
     }
 
     try {
-      setLoading(true)
-      console.log('[WorkplacePage] Toggling online status to:', checked)
-      await toggleDriverOnline(checked)
-      setIsOnline(checked)
+      setLoading(true);
+      console.log("[WorkplacePage] Toggling online status to:", checked);
+      await toggleDriverOnline(checked);
+      setIsOnline(checked);
       // Save online status to localStorage
-      localStorage.setItem('driverOnlineStatus', checked.toString())
-      console.log('[WorkplacePage] Saved online status to localStorage:', checked)
+      localStorage.setItem("driverOnlineStatus", checked.toString());
+      console.log(
+        "[WorkplacePage] Saved online status to localStorage:",
+        checked
+      );
       message.success(
         checked ? "Bạn đã online, sẵn sàng nhận chuyến!" : "Bạn đã offline"
-      )
+      );
       if (checked) {
-        getCurrentLocation()
-        loadPendingRides()
+        getCurrentLocation();
+        loadPendingRides();
       } else {
-        setPendingTrips([])
+        setPendingTrips([]);
       }
     } catch (error) {
-      const errorMsg = error.response?.data?.error || error.message || "Có lỗi xảy ra khi cập nhật trạng thái"
-      message.error(errorMsg)
-      console.error("Toggle online error:", error)
+      const errorMsg =
+        error.response?.data?.error ||
+        error.message ||
+        "Có lỗi xảy ra khi cập nhật trạng thái";
+      message.error(errorMsg);
+      console.error("Toggle online error:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleAcceptTrip = async (trip) => {
     try {
-      setLoading(true)
-      console.log('[WorkplacePage] Accepting trip:', trip)
-      await acceptRide(trip.id, trip.version)
-      setCurrentTrip({ ...trip, status: "accepted" })
-      setPendingTrips(pendingTrips.filter((t) => t.id !== trip.id))
-      setShowIncomingModal(false)
-      setSelectedTrip(null)
+      setLoading(true);
+      console.log("[WorkplacePage] Accepting trip:", trip);
+      await acceptRide(trip.id, trip.version);
+      setCurrentTrip({ ...trip, status: "accepted" });
+      setPendingTrips(pendingTrips.filter((t) => t.id !== trip.id));
+      setShowIncomingModal(false);
+      setSelectedTrip(null);
       // Join ride group to receive real-time updates
       if (trip.id) {
-        await joinRideGroup(trip.id)
+        await joinRideGroup(trip.id);
       }
-      message.success("Đã nhận chuyến!")
+      message.success("Đã nhận chuyến!");
     } catch (error) {
-      const errorMsg = error.response?.data?.error || error.message || "Không thể nhận chuyến"
-      message.error(errorMsg + " Có thể đã có tài xế khác nhận.")
-      console.error('[WorkplacePage] Accept ride error:', error)
-      loadPendingRides()
+      const errorMsg =
+        error.response?.data?.error || error.message || "Không thể nhận chuyến";
+      message.error(errorMsg + " Có thể đã có tài xế khác nhận.");
+      console.error("[WorkplacePage] Accept ride error:", error);
+      loadPendingRides();
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleViewTrip = (trip) => {
-    console.log('[WorkplacePage] Viewing trip:', trip)
-    setSelectedTrip(trip)
-    setShowIncomingModal(true)
-  }
+    console.log("[WorkplacePage] Viewing trip:", trip);
+    setSelectedTrip(trip);
+    setShowIncomingModal(true);
+  };
 
   const handleRejectTrip = () => {
     if (selectedTrip) {
-      setPendingTrips(pendingTrips.filter((t) => t.id !== selectedTrip.id))
-      message.info("Đã từ chối chuyến")
+      setPendingTrips(pendingTrips.filter((t) => t.id !== selectedTrip.id));
+      message.info("Đã từ chối chuyến");
     }
-    setShowIncomingModal(false)
-    setSelectedTrip(null)
-  }
+    setShowIncomingModal(false);
+    setSelectedTrip(null);
+  };
 
   const handleUpdateStatus = async (status) => {
     try {
-      setLoading(true)
+      setLoading(true);
       const apiStatus = {
         arriving: "DriverArriving",
         arrived: "DriverArrived",
         in_progress: "InProgress",
         completed: "Completed",
-      }[status]
+      }[status];
 
-      console.log('[WorkplacePage] Updating status to:', apiStatus)
+      console.log("[WorkplacePage] Updating status to:", apiStatus);
 
-      const finalPrice = status === "completed" ? currentTrip.price : undefined
-      await updateRideStatus(currentTrip.id, apiStatus, finalPrice)
+      const finalPrice = status === "completed" ? currentTrip.price : undefined;
+      await updateRideStatus(currentTrip.id, apiStatus, finalPrice);
 
-      setCurrentTrip({ ...currentTrip, status })
+      setCurrentTrip({ ...currentTrip, status });
       const statusMessages = {
         arriving: "Đang đến điểm đón",
         arrived: "Đã đến điểm đón",
         in_progress: "Đang di chuyển",
         completed: "Hoàn thành chuyến đi",
-      }
-      message.success(statusMessages[status])
+      };
+      message.success(statusMessages[status]);
 
       if (status === "completed") {
         setTimeout(async () => {
-          await leaveRideGroup(currentTrip.id)
-          setCurrentTrip(null)
+          await leaveRideGroup(currentTrip.id);
+          setCurrentTrip(null);
           if (isOnline) {
-            loadPendingRides()
+            loadPendingRides();
           }
-        }, 2000)
+        }, 2000);
       }
     } catch (error) {
-      const errorMsg = error.response?.data?.error || error.message || "Không thể cập nhật trạng thái"
-      message.error(errorMsg)
-      console.error('[WorkplacePage] Update status error:', error)
+      const errorMsg =
+        error.response?.data?.error ||
+        error.message ||
+        "Không thể cập nhật trạng thái";
+      message.error(errorMsg);
+      console.error("[WorkplacePage] Update status error:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleVehicleConfigSuccess = async (vehicleData) => {
-    console.log("Vehicle configured successfully:", vehicleData)
-    await checkVehicleInfo()
-    message.success("Bạn có thể bật trạng thái online ngay bây giờ!")
-  }
+    console.log("Vehicle configured successfully:", vehicleData);
+    await checkVehicleInfo();
+    message.success("Bạn có thể bật trạng thái online ngay bây giờ!");
+  };
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -437,12 +464,14 @@ function WorkplacePageContent() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center ${isOnline ? "bg-green-100" : "bg-gray-100"
-                }`}
+              className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                isOnline ? "bg-green-100" : "bg-gray-100"
+              }`}
             >
               <Power
-                className={`w-6 h-6 ${isOnline ? "text-green-600" : "text-gray-400"
-                  }`}
+                className={`w-6 h-6 ${
+                  isOnline ? "text-green-600" : "text-gray-400"
+                }`}
               />
             </div>
             <div>
@@ -493,19 +522,6 @@ function WorkplacePageContent() {
         )}
       </Card>
 
-      {/* Debug info - remove in production */}
-      {process.env.NODE_ENV === 'development' && (
-        <Card className="mb-6 bg-blue-50">
-          <div className="text-xs space-y-1">
-            <div>Trạng thái online: {isOnline ? 'Có' : 'Không'}</div>
-            <div>Có phương tiện: {hasVehicle ? 'Có' : 'Không'}</div>
-            <div>Chuyến hiện tại: {currentTrip ? currentTrip.id : 'Không có'}</div>
-            <div>Số chuyến đang chờ: {pendingTrips.length}</div>
-          </div>
-        </Card>
-      )}
-
-
       {!currentTrip && isOnline && pendingTrips.length > 0 && (
         <Card className="mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -531,14 +547,10 @@ function WorkplacePageContent() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-gray-400" />
-                      <span className="font-medium">
-                        {trip.customerName}
-                      </span>
+                      <span className="font-medium">{trip.customerName}</span>
                     </div>
                     <span className="text-xs text-gray-400">
-                      {format(new Date(trip.createdAt), "HH:mm", {
-                        locale: vi,
-                      })}
+                    {formatUtcToLocal(trip.createdAt, "HH:mm")}
                     </span>
                   </div>
                   <div className="flex items-start gap-2 mb-1">
@@ -572,9 +584,7 @@ function WorkplacePageContent() {
         <Card className="mb-6">
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold">
-                Chuyến đi hiện tại
-              </h3>
+              <h3 className="text-lg font-semibold">Chuyến đi hiện tại</h3>
               <Tag color="blue">{getStatusText(currentTrip.status)}</Tag>
             </div>
           </div>
@@ -582,16 +592,12 @@ function WorkplacePageContent() {
           <div className="space-y-3 mb-6">
             <div className="flex items-center gap-2 text-sm">
               <User className="w-4 h-4 text-gray-400" />
-              <span>
-                {currentTrip.customerName}
-              </span>
+              <span>{currentTrip.customerName}</span>
               {currentTrip.customerPhone && (
                 <>
                   <span className="text-gray-400">•</span>
                   <Phone className="w-4 h-4 text-gray-400" />
-                  <span>
-                    {currentTrip.customerPhone}
-                  </span>
+                  <span>{currentTrip.customerPhone}</span>
                 </>
               )}
             </div>
@@ -721,9 +727,7 @@ function WorkplacePageContent() {
           <div className="py-4">
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 text-gray-400" />
-              <span className="font-medium">
-                {selectedTrip.customerName}
-              </span>
+              <span className="font-medium">{selectedTrip.customerName}</span>
             </div>
             {selectedTrip.customerPhone && (
               <div className="flex items-center gap-2 mt-1">
@@ -737,9 +741,7 @@ function WorkplacePageContent() {
               <div className="flex items-center gap-2 mt-1">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <span className="text-sm text-gray-500">
-                  {format(new Date(selectedTrip.createdAt), "HH:mm:ss", {
-                    locale: vi,
-                  })}
+                {formatUtcToLocal(selectedTrip.createdAt, "HH:mm:ss")}
                 </span>
               </div>
             )}
@@ -788,7 +790,7 @@ function WorkplacePageContent() {
         onSuccess={handleVehicleConfigSuccess}
       />
     </div>
-  )
+  );
 }
 
 function getStatusText(status) {
@@ -799,8 +801,8 @@ function getStatusText(status) {
     arrived: "Đã đến",
     in_progress: "Đang đi",
     completed: "Hoàn thành",
-  }
-  return texts[status] || status
+  };
+  return texts[status] || status;
 }
 
 export default function WorkplacePage() {
@@ -808,5 +810,5 @@ export default function WorkplacePage() {
     <App>
       <WorkplacePageContent />
     </App>
-  )
+  );
 }
