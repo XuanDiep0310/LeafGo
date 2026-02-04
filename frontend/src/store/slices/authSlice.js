@@ -28,16 +28,16 @@ export const login = createAsyncThunk(
 
       const response = await authService.login(phoneOrEmail, password);
 
-      // ✅ Sau login thành công, lấy full profile từ backend
+      // Sau login thành công, lấy full profile từ backend
       try {
         const fullProfile = await authService.getUserProfile();
         response.user = fullProfile; // Overwrite với dữ liệu mới nhất (bao gồm avatar)
-        console.log("✅ Full profile loaded after login:", fullProfile);
+        console.log(" Full profile loaded after login:", fullProfile);
       } catch (profileError) {
-        console.warn("⚠️ Could not load full profile:", profileError.message);
+        console.warn(" Could not load full profile:", profileError.message);
         // Tiếp tục với response từ login nếu getUserProfile fail
       }
-      
+
       // Tokens are already stored in authService.login
       // Just store user in localStorage for backward compatibility
       localStorage.setItem("user", JSON.stringify(response.user));
@@ -55,6 +55,15 @@ export const register = createAsyncThunk(
   async (userData, { rejectWithValue }) => {
     try {
       const response = await authService.register(userData);
+
+      // Sau register thành công, lấy full profile từ backend
+      try {
+        const fullProfile = await authService.getUserProfile();
+        response.user = fullProfile;
+        console.log("Full profile loaded after register:", fullProfile);
+      } catch (profileError) {
+        console.warn("Could not load full profile:", profileError.message);
+      }
 
       // Tokens are already stored in authService.register
       localStorage.setItem("user", JSON.stringify(response.user));
@@ -148,6 +157,21 @@ export const getUserProfile = createAsyncThunk(
   },
 );
 
+export const updateUserVehicle = createAsyncThunk(
+  "auth/updateUserVehicle",
+  async (_, { rejectWithValue }) => {
+    try {
+      // Sau update vehicle, lấy lại full profile từ backend
+      const updatedUser = await authService.getUserProfile();
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      console.log("✅ User vehicle updated:", updatedUser);
+      return updatedUser;
+    } catch (error) {
+      return rejectWithValue(error.message || "Cập nhật xe thất bại");
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: "auth",
   initialState,
@@ -190,6 +214,17 @@ const authSlice = createSlice({
     updateAvatar: (state, action) => {
       if (state.user) {
         state.user.avatar = action.payload;
+        localStorage.setItem("user", JSON.stringify(state.user));
+      }
+    },
+
+    // Thêm reducer synchronous để update vehicle ngay lập tức
+    updateVehicleInfo: (state, action) => {
+      if (state.user) {
+        state.user = {
+          ...state.user,
+          ...action.payload, // merge vehicle info vào user
+        };
         localStorage.setItem("user", JSON.stringify(state.user));
       }
     },
@@ -299,6 +334,19 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(getUserProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateUserVehicle.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateUserVehicle.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(updateUserVehicle.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

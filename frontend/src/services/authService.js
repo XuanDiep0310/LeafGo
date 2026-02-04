@@ -97,6 +97,10 @@ export const authService = {
 
       const d = res.data;
 
+      if (d.accessToken) {
+        localStorage.setItem("accessToken", d.accessToken);
+      }
+
       const user = {
         id: d.id,
         username: d.email || d.phoneNumber,

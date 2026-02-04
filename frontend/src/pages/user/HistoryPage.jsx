@@ -1,7 +1,21 @@
 "use client";
 
+import { formatUtcToLocal } from "../../utils/date";
+
 import { useEffect, useState } from "react";
-import { Card, Empty, Modal, Input, message, Tag, Button, Pagination, Select, DatePicker, Spin } from "antd";
+import {
+  Card,
+  Empty,
+  Modal,
+  Input,
+  message,
+  Tag,
+  Button,
+  Pagination,
+  Select,
+  DatePicker,
+  Spin,
+} from "antd";
 import {
   Calendar,
   MapPin,
@@ -69,7 +83,9 @@ export default function HistoryPage() {
       }
     } catch (error) {
       console.error("Error fetching ride history:", error);
-      message.error(error.response?.data?.error || "Không thể tải lịch sử chuyến đi");
+      message.error(
+        error.response?.data?.error || "Không thể tải lịch sử chuyến đi"
+      );
     } finally {
       setLoading(false);
     }
@@ -152,7 +168,9 @@ export default function HistoryPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Khoảng thời gian</label>
+            <label className="block text-sm font-medium mb-2">
+              Khoảng thời gian
+            </label>
             <RangePicker
               value={dateRange}
               onChange={setDateRange}
@@ -183,9 +201,7 @@ export default function HistoryPage() {
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                      {format(new Date(ride.requestedAt), "dd/MM/yyyy HH:mm", {
-                        locale: vi,
-                      })}
+                      {formatUtcToLocal(ride.requestedAt)}
                     </span>
                   </div>
                   <Tag color={getStatusColor(ride.status)}>
@@ -212,7 +228,10 @@ export default function HistoryPage() {
                       <div className="flex items-center gap-2">
                         <Car className="w-4 h-4 text-muted-foreground" />
                         <span className="text-sm text-muted-foreground">
-                          {ride.driver.vehicle.vehicleBrand} {ride.driver.vehicle.vehicleModel} - {ride.driver.vehicle.vehicleColor} - {ride.driver.vehicle.licensePlate}
+                          {ride.driver.vehicle.vehicleBrand}{" "}
+                          {ride.driver.vehicle.vehicleModel} -{" "}
+                          {ride.driver.vehicle.vehicleColor} -{" "}
+                          {ride.driver.vehicle.licensePlate}
                         </span>
                       </div>
                     )}
@@ -262,10 +281,11 @@ export default function HistoryPage() {
                           {[...Array(5)].map((_, i) => (
                             <Star
                               key={i}
-                              className={`w-4 h-4 ${i < ride.rating.rating
+                              className={`w-4 h-4 ${
+                                i < ride.rating.rating
                                   ? "text-yellow-400 fill-yellow-400"
                                   : "text-gray-300"
-                                }`}
+                              }`}
                             />
                           ))}
                         </div>
@@ -338,10 +358,11 @@ export default function HistoryPage() {
                   className="transition-transform hover:scale-110"
                 >
                   <Star
-                    className={`w-10 h-10 ${value <= rating
+                    className={`w-10 h-10 ${
+                      value <= rating
                         ? "text-yellow-400 fill-yellow-400"
                         : "text-gray-300"
-                      }`}
+                    }`}
                   />
                 </button>
               ))}

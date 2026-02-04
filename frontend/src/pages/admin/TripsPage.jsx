@@ -1,7 +1,18 @@
 "use client";
 
+import { formatUtcToLocal } from "../../utils/date";
+
 import { useEffect, useState } from "react";
-import { Input, Select, DatePicker, Card, Button, Empty, Spin, Pagination } from "antd";
+import {
+  Input,
+  Select,
+  DatePicker,
+  Card,
+  Button,
+  Empty,
+  Spin,
+  Pagination,
+} from "antd";
 import { Search, Star, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -49,7 +60,7 @@ export default function AdminTripsPage() {
         setTrips(response.data.items);
         setTotalItems(response.data.totalItems);
       } else {
-        console.error('Error fetching trips:', response.message);
+        console.error("Error fetching trips:", response.message);
       }
     } catch (error) {
       console.error("Error fetching trips:", error);
@@ -99,9 +110,7 @@ export default function AdminTripsPage() {
           <Clock className="w-5 h-5 text-gray-400 shrink-0" />
           <div>
             <div className="text-sm text-gray-500">
-              {format(new Date(trip.requestedAt), "dd/MM/yyyy HH:mm", {
-                locale: vi,
-              })}
+              {formatUtcToLocal(trip.requestedAt, "DD/MM/YYYY HH:mm")}
             </div>
           </div>
         </div>
@@ -135,7 +144,10 @@ export default function AdminTripsPage() {
         <div>
           <div className="text-gray-500 text-xs">Giá</div>
           <div className="font-bold text-blue-600">
-            {trip.finalPrice ? trip.finalPrice.toLocaleString() : trip.estimatedPrice?.toLocaleString()}đ
+            {trip.finalPrice
+              ? trip.finalPrice.toLocaleString()
+              : trip.estimatedPrice?.toLocaleString()}
+            đ
           </div>
         </div>
       </div>
@@ -145,14 +157,22 @@ export default function AdminTripsPage() {
         <div className="border-r pr-3">
           <div className="text-gray-500 text-xs mb-1">Khách hàng</div>
           <div className="font-medium">{trip.user?.fullName || "N/A"}</div>
-          <div className="text-xs text-gray-600">{trip.user?.phoneNumber || "-"}</div>
+          <div className="text-xs text-gray-600">
+            {trip.user?.phoneNumber || "-"}
+          </div>
         </div>
         <div className="pl-3">
           <div className="text-gray-500 text-xs mb-1">Tài xế</div>
-          <div className="font-medium">{trip.driver?.fullName || "Chưa có"}</div>
-          <div className="text-xs text-gray-600">{trip.driver?.phoneNumber || "-"}</div>
+          <div className="font-medium">
+            {trip.driver?.fullName || "Chưa có"}
+          </div>
+          <div className="text-xs text-gray-600">
+            {trip.driver?.phoneNumber || "-"}
+          </div>
           {trip.driver?.licensePlate && (
-            <div className="text-xs text-blue-600 font-semibold">{trip.driver.licensePlate}</div>
+            <div className="text-xs text-blue-600 font-semibold">
+              {trip.driver.licensePlate}
+            </div>
           )}
         </div>
       </div>
@@ -166,10 +186,11 @@ export default function AdminTripsPage() {
               {[...Array(5)].map((_, i) => (
                 <Star
                   key={i}
-                  className={`w-4 h-4 ${i < trip.rating.rating
-                    ? "text-yellow-400 fill-yellow-400"
-                    : "text-gray-300"
-                    }`}
+                  className={`w-4 h-4 ${
+                    i < trip.rating.rating
+                      ? "text-yellow-400 fill-yellow-400"
+                      : "text-gray-300"
+                  }`}
                 />
               ))}
             </div>
@@ -189,7 +210,9 @@ export default function AdminTripsPage() {
           <div className="text-gray-500 text-xs mb-1">Lý do hủy</div>
           <div className="text-sm text-red-600">{trip.cancellationReason}</div>
           {trip.cancelledBy && (
-            <div className="text-xs text-gray-500 mt-1">Bởi: {trip.cancelledBy}</div>
+            <div className="text-xs text-gray-500 mt-1">
+              Bởi: {trip.cancelledBy}
+            </div>
           )}
         </div>
       )}
@@ -204,9 +227,7 @@ export default function AdminTripsPage() {
         </h2>
         <p className="text-muted-foreground text-sm">
           Tổng:{" "}
-          <span className="font-semibold text-foreground">
-            {totalItems}
-          </span>{" "}
+          <span className="font-semibold text-foreground">{totalItems}</span>{" "}
           chuyến
         </p>
       </div>

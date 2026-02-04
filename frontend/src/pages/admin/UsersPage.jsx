@@ -64,18 +64,25 @@ export default function AdminUsersPage() {
         PageSize: pageSize,
         Search: searchText || undefined,
         Role: roleFilter || undefined,
-        IsActive: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
+        IsActive:
+          statusFilter === "active"
+            ? true
+            : statusFilter === "inactive"
+            ? false
+            : undefined,
       });
 
       if (response.success) {
         setUsers(response.data.items);
         setTotalItems(response.data.totalItems);
       } else {
-        message.error(response.message || 'Lỗi khi tải danh sách người dùng');
+        message.error(response.message || "Lỗi khi tải danh sách người dùng");
       }
     } catch (error) {
-      console.error('Error fetching users:', error);
-      message.error(error.response?.data?.error || 'Không thể tải danh sách người dùng');
+      console.error("Error fetching users:", error);
+      message.error(
+        error.response?.data?.error || "Không thể tải danh sách người dùng"
+      );
     } finally {
       setLoading(false);
     }
@@ -104,17 +111,21 @@ export default function AdminUsersPage() {
       }
 
       if (response.success) {
-        message.success(editingUser ? 'Cập nhật thành công' : 'Tạo tài khoản thành công');
+        message.success(
+          editingUser ? "Cập nhật thành công" : "Tạo tài khoản thành công"
+        );
         setModalVisible(false);
         form.resetFields();
         setEditingUser(null);
         fetchUsers();
       } else {
-        message.error(response.message || 'Có lỗi xảy ra');
+        message.error(response.message || "Có lỗi xảy ra");
       }
     } catch (error) {
-      console.error('Error saving user:', error);
-      message.error(error.response?.data?.error || error.message || 'Có lỗi xảy ra');
+      console.error("Error saving user:", error);
+      message.error(
+        error.response?.data?.error || error.message || "Có lỗi xảy ra"
+      );
     }
   };
 
@@ -124,14 +135,14 @@ export default function AdminUsersPage() {
       const response = await deleteUser(id);
 
       if (response.success) {
-        message.success('Xóa tài khoản thành công');
+        message.success("Xóa tài khoản thành công");
         fetchUsers();
       } else {
-        message.error(response.message || 'Có lỗi xảy ra');
+        message.error(response.message || "Có lỗi xảy ra");
       }
     } catch (error) {
-      console.error('Error deleting user:', error);
-      message.error(error.response?.data?.error || 'Có lỗi xảy ra');
+      console.error("Error deleting user:", error);
+      message.error(error.response?.data?.error || "Có lỗi xảy ra");
     }
   };
 
@@ -141,14 +152,16 @@ export default function AdminUsersPage() {
       const response = await toggleUserStatus(user.id, !user.isActive);
 
       if (response.success) {
-        message.success(user.isActive ? 'Đã khóa tài khoản' : 'Đã mở khóa tài khoản');
+        message.success(
+          user.isActive ? "Đã khóa tài khoản" : "Đã mở khóa tài khoản"
+        );
         fetchUsers();
       } else {
-        message.error(response.message || 'Có lỗi xảy ra');
+        message.error(response.message || "Có lỗi xảy ra");
       }
     } catch (error) {
-      console.error('Error toggling user status:', error);
-      message.error(error.response?.data?.error || 'Có lỗi xảy ra');
+      console.error("Error toggling user status:", error);
+      message.error(error.response?.data?.error || "Có lỗi xảy ra");
     }
   };
 
@@ -208,14 +221,16 @@ export default function AdminUsersPage() {
           <Tag color={role === "Driver" ? "blue" : "green"}>
             {role === "Driver" ? "Tài xế" : "Khách hàng"}
           </Tag>
-          {role === "Driver" && record.stats && record.stats.averageRating > 0 && (
-            <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-              <span className="text-xs font-semibold text-yellow-600">
-                {record.stats.averageRating.toFixed(1)}/5
-              </span>
-            </div>
-          )}
+          {role === "Driver" &&
+            record.stats &&
+            record.stats.averageRating > 0 && (
+              <div className="flex items-center gap-1">
+                <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                <span className="text-xs font-semibold text-yellow-600">
+                  {record.stats.averageRating.toFixed(1)}/5
+                </span>
+              </div>
+            )}
         </div>
       ),
     },
@@ -264,16 +279,6 @@ export default function AdminUsersPage() {
           >
             {record.isActive ? "Khóa" : "Mở"}
           </Button>
-          <Popconfirm
-            title="Bạn có chắc muốn xóa?"
-            onConfirm={() => handleDelete(record.id)}
-            okText="Xóa"
-            cancelText="Hủy"
-          >
-            <Button size="small" danger icon={<Trash2 className="w-4 h-4" />}>
-              Xóa
-            </Button>
-          </Popconfirm>
         </div>
       ),
     },

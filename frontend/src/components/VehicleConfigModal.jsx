@@ -149,6 +149,7 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
             form.resetFields();
             setSelectedType(null);
             setError(null);
+            setVehicleTypes([]);
             onClose();
         }
     };
@@ -276,9 +277,9 @@ export default function VehicleConfigModal({ open, onClose, onSuccess }) {
                         rules={[
                             { required: true, message: "Vui lòng nhập biển số xe" },
                             {
-                                pattern: /^[0-9]{2}[A-Z]{1,2}-[0-9]{4,5}$/,
-                                message: "Biển số không hợp lệ (VD: 29A-12345)",
-                            },
+                                pattern: /^[0-9]{2}[A-Z]{1,3}-[0-9]{4,5}(\.[0-9]{2})?$/,
+                                message: "Biển số không hợp lệ (VD: 29A-12345 hoặc 29A1-12345)",
+                              },
                         ]}
                     >
                         <Input
