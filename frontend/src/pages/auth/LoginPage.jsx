@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
-import { Form, Input, Button, Card, App } from "antd"; // ✅ Thêm App
+import { Form, Input, Button, Card, App } from "antd"; // Thêm App
 import { Leaf } from "lucide-react";
 import { login, clearError } from "../../store/slices/authSlice";
 
@@ -11,7 +11,7 @@ import { login, clearError } from "../../store/slices/authSlice";
 export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { message } = App.useApp(); // ✅ Dùng hook này thay vì import message
+  const { message } = App.useApp(); 
   const { loading, error, isAuthenticated, user } = useSelector(
     (state) => state.auth
   );
@@ -27,7 +27,7 @@ export default function LoginPage() {
   // Redirect after successful login
   useEffect(() => {
     if (isAuthenticated && user) {
-      // ✅ Sửa logic: toLowerCase() rồi mới so sánh
+
       const role = user.role.toLowerCase();
 
       if (role === "user") navigate("/user/booking");
@@ -66,13 +66,13 @@ export default function LoginPage() {
 
         <Form layout="vertical" onFinish={handleLogin} size="large">
           <Form.Item
-            label="Email hoặc Số điện thoại"
+            label="Email"
             name="phoneOrEmail"
             rules={[
-              { required: true, message: "Vui lòng nhập email hoặc số điện thoại" }
+              { required: true, message: "Vui lòng nhập email" }
             ]}
           >
-            <Input placeholder="email@example.com hoặc 0123456789" />
+            <Input placeholder="email@example.com" />
           </Form.Item>
 
           <Form.Item

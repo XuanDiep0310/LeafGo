@@ -1,0 +1,499 @@
+LeafGo API
+ v1 
+OAS3
+/swagger/v1/swagger.json
+LeafGo Ride Booking API
+
+Authorize
+Auth
+
+
+POST
+/api/Auth/register
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "email": "user@example.com",
+  "password": "string",
+  "fullName": "string",
+  "phoneNumber": "string",
+  "role": "Driver"
+}
+Responses
+Code	Description	Links
+201	
+Created
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "email": "string",
+    "fullName": "string",
+    "role": "string",
+    "accessToken": "string",
+    "refreshToken": "string",
+    "expiresAt": "2026-01-04T09:46:33.028Z",
+    "isOnline": true
+  },
+  "timestamp": "2026-01-04T09:46:33.028Z"
+}
+No links
+400	
+Bad Request
+
+Media type
+
+text/plain
+Example Value
+Schema
+{
+  "error": "string",
+  "details": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "timestamp": "2026-01-04T09:46:33.030Z"
+}
+No links
+
+POST
+/api/Auth/login
+
+Parameters
+Cancel
+Reset
+No parameters
+
+Request body
+
+application/json
+{
+  "email": "admin@leafgo.com",
+  "password": "Admin@123"
+}
+Execute
+Clear
+Responses
+Curl
+
+curl -X 'POST' \
+  'http://localhost:5191/api/Auth/login' \
+  -H 'accept: text/plain' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "email": "admin@leafgo.com",
+  "password": "Admin@123"
+}'
+Request URL
+http://localhost:5191/api/Auth/login
+Server response
+Code	Details
+Undocumented
+Failed to fetch.
+Possible Reasons:
+
+CORS
+Network Failure
+URL scheme must be "http" or "https" for CORS request.
+Responses
+Code	Description	Links
+200	
+Success
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "email": "string",
+    "fullName": "string",
+    "role": "string",
+    "accessToken": "string",
+    "refreshToken": "string",
+    "expiresAt": "2026-01-04T09:46:33.032Z",
+    "isOnline": true
+  },
+  "timestamp": "2026-01-04T09:46:33.032Z"
+}
+No links
+401	
+Unauthorized
+
+Media type
+
+text/plain
+Example Value
+Schema
+{
+  "error": "string",
+  "details": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "timestamp": "2026-01-04T09:46:33.033Z"
+}
+No links
+
+POST
+/api/Auth/refresh-token
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "refreshToken": "string"
+}
+Responses
+Code	Description	Links
+200	
+Success
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": {
+    "accessToken": "string",
+    "refreshToken": "string",
+    "expiresAt": "2026-01-04T09:46:33.042Z"
+  },
+  "timestamp": "2026-01-04T09:46:33.042Z"
+}
+No links
+401	
+Unauthorized
+
+Media type
+
+text/plain
+Example Value
+Schema
+{
+  "error": "string",
+  "details": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "timestamp": "2026-01-04T09:46:33.043Z"
+}
+No links
+
+POST
+/api/Auth/revoke-token
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "refreshToken": "string"
+}
+Responses
+Code	Description	Links
+200	
+Success
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": "string",
+  "timestamp": "2026-01-04T09:46:33.047Z"
+}
+No links
+400	
+Bad Request
+
+Media type
+
+text/plain
+Example Value
+Schema
+{
+  "error": "string",
+  "details": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "timestamp": "2026-01-04T09:46:33.048Z"
+}
+No links
+
+POST
+/api/Auth/revoke-all-tokens
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Success
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": "string",
+  "timestamp": "2026-01-04T09:46:33.049Z"
+}
+No links
+
+GET
+/api/Auth/tokens
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Success
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": [
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "createdAt": "2026-01-04T09:46:33.051Z",
+      "expiresAt": "2026-01-04T09:46:33.051Z",
+      "createdByIp": "string",
+      "isActive": true
+    }
+  ],
+  "timestamp": "2026-01-04T09:46:33.051Z"
+}
+No links
+
+POST
+/api/Auth/change-password
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "currentPassword": "string",
+  "newPassword": "string"
+}
+Responses
+Code	Description	Links
+200	
+Success
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": "string",
+  "timestamp": "2026-01-04T09:46:33.053Z"
+}
+No links
+400	
+Bad Request
+
+Media type
+
+text/plain
+Example Value
+Schema
+{
+  "error": "string",
+  "details": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "timestamp": "2026-01-04T09:46:33.054Z"
+}
+No links
+401	
+Unauthorized
+
+Media type
+
+text/plain
+Example Value
+Schema
+{
+  "error": "string",
+  "details": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "timestamp": "2026-01-04T09:46:33.054Z"
+}
+No links
+
+POST
+/api/Auth/forgot-password
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "email": "user@example.com"
+}
+Responses
+Code	Description	Links
+200	
+Success
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": "string",
+  "timestamp": "2026-01-04T09:46:33.056Z"
+}
+No links
+
+POST
+/api/Auth/reset-password
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "token": "string",
+  "newPassword": "string"
+}
+Responses
+Code	Description	Links
+200	
+Success
+
+Media type
+
+text/plain
+Controls Accept header.
+Example Value
+Schema
+{
+  "success": true,
+  "message": "string",
+  "data": "string",
+  "timestamp": "2026-01-04T09:46:33.058Z"
+}
+No links
+400	
+Bad Request
+
+Media type
+
+text/plain
+Example Value
+Schema
+{
+  "error": "string",
+  "details": {
+    "additionalProp1": "string",
+    "additionalProp2": "string",
+    "additionalProp3": "string"
+  },
+  "timestamp": "2026-01-04T09:46:33.058Z"
+}
+No links
+LeafGo.API
+
+
+GET
+/health
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Success

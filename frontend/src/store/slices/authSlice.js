@@ -28,6 +28,16 @@ export const login = createAsyncThunk(
 
       const response = await authService.login(phoneOrEmail, password);
 
+      // ✅ Sau login thành công, lấy full profile từ backend
+      try {
+        const fullProfile = await authService.getUserProfile();
+        response.user = fullProfile; // Overwrite với dữ liệu mới nhất (bao gồm avatar)
+        console.log("✅ Full profile loaded after login:", fullProfile);
+      } catch (profileError) {
+        console.warn("⚠️ Could not load full profile:", profileError.message);
+        // Tiếp tục với response từ login nếu getUserProfile fail
+      }
+      
       // Tokens are already stored in authService.login
       // Just store user in localStorage for backward compatibility
       localStorage.setItem("user", JSON.stringify(response.user));

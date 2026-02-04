@@ -191,21 +191,21 @@ export default function DriverDashboardPage() {
         {existingVehicle ? (
           <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
             <p className="text-xs font-semibold text-green-900 mb-2">
-              ✓ Xe đang sử dụng
+              Xe đang sử dụng:
             </p>
 
             <div className="text-sm text-green-800 space-y-1">
               <p>
-                • Loại xe: {existingVehicle.vehicleType?.name || 'N/A'}
+                - Loại xe: {existingVehicle.vehicleType?.name || 'N/A'}
               </p>
               <p>
-                • Biển số: {existingVehicle.licensePlate || 'N/A'}
+                - Biển số: {existingVehicle.licensePlate || 'N/A'}
               </p>
               <p>
-                • Hãng & mẫu: {existingVehicle.vehicleBrand || 'N/A'} {existingVehicle.vehicleModel || ''}
+                - Hãng & mẫu: {existingVehicle.vehicleBrand || 'N/A'} {existingVehicle.vehicleModel || ''}
               </p>
               <p>
-                • Màu xe: {existingVehicle.vehicleColor || 'N/A'}
+                - Màu xe: {existingVehicle.vehicleColor || 'N/A'}
               </p>
             </div>
           </div>

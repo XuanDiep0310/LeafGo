@@ -13,6 +13,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
 using System.Text;
+using Microsoft.Extensions.FileProviders;
+
 
 namespace LeafGo.API
 {
@@ -209,7 +211,14 @@ namespace LeafGo.API
             app.UseHttpsRedirection();
 
             // Serve static files for uploaded avatars
-            app.UseStaticFiles();
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(
+                    Path.Combine(Directory.GetCurrentDirectory(), "wwwroot")
+                ),
+                RequestPath = ""
+            });
+
 
             // Add exception handling middleware
             app.UseMiddleware<ExceptionHandlingMiddleware>();
