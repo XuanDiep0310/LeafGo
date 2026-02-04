@@ -67,7 +67,7 @@ export const startSignalRConnection = async (token) => {
         if (conn.state === signalR.HubConnectionState.Disconnected) {
             console.log(`[SignalR] Attempting to connect...`);
             await conn.start();
-            console.log("[SignalR] ✅ Connected successfully!");
+            console.log("[SignalR] Connected successfully!");
             console.log("[SignalR] Connection ID:", conn.connectionId);
             console.log("[SignalR] Connection state:", conn.state);
             return conn;
@@ -86,7 +86,7 @@ export const startSignalRConnection = async (token) => {
         });
 
         if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_CONNECTION_REFUSED')) {
-            console.error("[SignalR] 🔧 Troubleshooting:");
+            console.error("[SignalR] Troubleshooting:");
             console.error("  1. Check if Vite proxy is configured for /hubs/ride");
             console.error("  2. Check if backend container is running: docker ps");
             console.error("  3. Check backend logs: docker logs <api-container>");
@@ -127,9 +127,9 @@ export const joinRideGroup = async (rideId) => {
     }
     try {
         await connection.invoke("JoinRideGroup", rideId);
-        console.log(`[SignalR] ✅ Joined ride group: ${rideId}`);
+        console.log(`[SignalR] Joined ride group: ${rideId}`);
     } catch (error) {
-        console.error("[SignalR] ❌ Error joining ride group:", error);
+        console.error("[SignalR] Error joining ride group:", error);
         throw error;
     }
 };
@@ -141,9 +141,9 @@ export const leaveRideGroup = async (rideId) => {
     }
     try {
         await connection.invoke("LeaveRideGroup", rideId);
-        console.log(`[SignalR] ✅ Left ride group: ${rideId}`);
+        console.log(`[SignalR] Left ride group: ${rideId}`);
     } catch (error) {
-        console.error("[SignalR] ❌ Error leaving ride group:", error);
+        console.error("[SignalR] Error leaving ride group:", error);
     }
 };
 
@@ -154,9 +154,9 @@ export const updateDriverLocation = async (rideId, latitude, longitude) => {
     }
     try {
         await connection.invoke("UpdateDriverLocation", rideId, latitude, longitude);
-        console.log(`[SignalR] ✅ Updated driver location for ride ${rideId}`);
+        console.log(`[SignalR] Updated driver location for ride ${rideId}`);
     } catch (error) {
-        console.error("[SignalR] ❌ Error updating location:", error);
+        console.error("[SignalR] Error updating location:", error);
     }
 };
 
@@ -164,42 +164,42 @@ export const updateDriverLocation = async (rideId, latitude, longitude) => {
 export const onNewRideRequest = (callback) => {
     if (connection) {
         connection.on("NewRideRequest", callback);
-        console.log("[SignalR] 📡 Registered handler for NewRideRequest");
+        console.log("[SignalR] Registered handler for NewRideRequest");
     }
 };
 
 export const onRideAccepted = (callback) => {
     if (connection) {
         connection.on("RideAccepted", callback);
-        console.log("[SignalR] 📡 Registered handler for RideAccepted");
+        console.log("[SignalR] Registered handler for RideAccepted");
     }
 };
 
 export const onRideStatusChanged = (callback) => {
     if (connection) {
         connection.on("RideStatusChanged", callback);
-        console.log("[SignalR] 📡 Registered handler for RideStatusChanged");
+        console.log("[SignalR] Registered handler for RideStatusChanged");
     }
 };
 
 export const onDriverLocationUpdated = (callback) => {
     if (connection) {
         connection.on("DriverLocationUpdated", callback);
-        console.log("[SignalR] 📡 Registered handler for DriverLocationUpdated");
+        console.log("[SignalR] Registered handler for DriverLocationUpdated");
     }
 };
 
 export const onRideCompleted = (callback) => {
     if (connection) {
         connection.on("RideCompleted", callback);
-        console.log("[SignalR] 📡 Registered handler for RideCompleted");
+        console.log("[SignalR] Registered handler for RideCompleted");
     }
 };
 
 export const onRideCancelled = (callback) => {
     if (connection) {
         connection.on("RideCancelled", callback);
-        console.log("[SignalR] 📡 Registered handler for RideCancelled");
+        console.log("[SignalR] Registered handler for RideCancelled");
     }
 };
 
@@ -207,42 +207,42 @@ export const onRideCancelled = (callback) => {
 export const offNewRideRequest = () => {
     if (connection) {
         connection.off("NewRideRequest");
-        console.log("[SignalR] 🔇 Removed handler for NewRideRequest");
+        console.log("[SignalR] Removed handler for NewRideRequest");
     }
 };
 
 export const offRideAccepted = () => {
     if (connection) {
         connection.off("RideAccepted");
-        console.log("[SignalR] 🔇 Removed handler for RideAccepted");
+        console.log("[SignalR] Removed handler for RideAccepted");
     }
 };
 
 export const offRideStatusChanged = () => {
     if (connection) {
         connection.off("RideStatusChanged");
-        console.log("[SignalR] 🔇 Removed handler for RideStatusChanged");
+        console.log("[SignalR] Removed handler for RideStatusChanged");
     }
 };
 
 export const offDriverLocationUpdated = () => {
     if (connection) {
         connection.off("DriverLocationUpdated");
-        console.log("[SignalR] 🔇 Removed handler for DriverLocationUpdated");
+        console.log("[SignalR] Removed handler for DriverLocationUpdated");
     }
 };
 
 export const offRideCompleted = () => {
     if (connection) {
         connection.off("RideCompleted");
-        console.log("[SignalR] 🔇 Removed handler for RideCompleted");
+        console.log("[SignalR] Removed handler for RideCompleted");
     }
 };
 
 export const offRideCancelled = () => {
     if (connection) {
         connection.off("RideCancelled");
-        console.log("[SignalR] 🔇 Removed handler for RideCancelled");
+        console.log("[SignalR] Removed handler for RideCancelled");
     }
 };
 

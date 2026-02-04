@@ -429,3 +429,23 @@ VALUES (
     1
 );
 GO
+
+ALTER TABLE Users
+ADD CONSTRAINT CK_Users_Email_Format
+CHECK (
+    Email LIKE '%_@_%._%' 
+    AND Email NOT LIKE '% %'
+);
+ALTER TABLE Users
+ADD CONSTRAINT CK_Users_PhoneNumber_VN
+CHECK (
+    PhoneNumber LIKE '0%' 
+    AND LEN(PhoneNumber) = 10
+    AND PhoneNumber NOT LIKE '%[^0-9]%'
+);
+CREATE UNIQUE INDEX UX_Users_Email_Active
+ON Users (Email)
+WHERE IsDeleted = 0;
+CREATE UNIQUE INDEX UX_Users_Phone_Active
+ON Users (PhoneNumber)
+WHERE IsDeleted = 0;

@@ -17,21 +17,19 @@ export const authService = {
         throw new Error("Vui lòng nhập đầy đủ thông tin đăng nhập");
       }
 
-      console.log("🔍 Login attempt:", { phoneOrEmail, password: "***" }); // Debug
+      console.log("Login attempt:", { phoneOrEmail, password: "***" }); // Debug
 
       // Backend yêu cầu CẢ email VÀ phoneNumber, để empty string nếu không có
       const isEmail = String(phoneOrEmail).includes("@");
-      const payload = {
-        email: isEmail ? phoneOrEmail : "",
-        phoneNumber: isEmail ? "" : phoneOrEmail,
-        password
-      };
+      const payload = isEmail
+        ? { email: phoneOrEmail, password }
+        : { phoneNumber: phoneOrEmail, password };
 
-      console.log("📤 Payload sent:", payload); // Debug
+      console.log("Payload sent:", payload); // Debug
 
       const res = await apiLogin(payload);
 
-      console.log("✅ Login response:", res); // Debug
+      console.log("Login response:", res); // Debug
 
       // res should be the API wrapper response: { success, message, data }
       if (!res.success) {
@@ -48,16 +46,19 @@ export const authService = {
         fullName: d.fullName,
         phoneNumber: d.phoneNumber,
         role: d.role,
+
+        rating: d.rating ?? 0,
+        totalTrips: d.totalTrips ?? 0,
+        
         balance: d.balance || 0,
-        avatar: d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
+        avatar:
+          d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
         isActive: d.isActive !== false,
         isOnline: d.isOnline,
-        createdAt: d.createdAt || new Date().toISOString(), // ✅ FIX: Use ISO string
+        createdAt: d.createdAt || new Date().toISOString(), 
         // Include driver-specific fields if present
         ...(d.vehicleInfo && { vehicleInfo: d.vehicleInfo }),
         ...(d.driverStatus && { driverStatus: d.driverStatus }),
-        ...(d.rating && { rating: d.rating }),
-        ...(d.totalTrips && { totalTrips: d.totalTrips }),
       };
 
       // Store user data
@@ -68,7 +69,11 @@ export const authService = {
         token: d.accessToken || null,
       };
     } catch (error) {
-      const message = error.response?.data?.message || error.message || "Đăng nhập thất bại";
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Đăng nhập thất bại";
       throw new Error(message);
     }
   },
@@ -100,7 +105,8 @@ export const authService = {
         phoneNumber: d.phoneNumber,
         role: d.role,
         balance: d.balance || 0,
-        avatar: d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
+        avatar:
+          d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
         isActive: d.isActive !== false,
         isOnline: d.isOnline,
         createdAt: d.createdAt || new Date().toISOString(), // ✅ FIX: Use ISO string
@@ -113,7 +119,11 @@ export const authService = {
         token: d.accessToken || null,
       };
     } catch (error) {
-      const message = error.response?.data?.message || error.message || "Đăng ký thất bại";
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Đăng ký thất bại";
       throw new Error(message);
     }
   },
@@ -129,7 +139,11 @@ export const authService = {
 
       return res;
     } catch (error) {
-      const message = error.response?.data?.message || error.message || "Gửi mã xác thực thất bại";
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Gửi mã xác thực thất bại";
       throw new Error(message);
     }
   },
@@ -145,7 +159,11 @@ export const authService = {
 
       return res;
     } catch (error) {
-      const message = error.response?.data?.message || error.message || "Đặt lại mật khẩu thất bại";
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Đặt lại mật khẩu thất bại";
       throw new Error(message);
     }
   },
@@ -161,7 +179,11 @@ export const authService = {
 
       return res;
     } catch (error) {
-      const message = error.response?.data?.message || error.message || "Đổi mật khẩu thất bại";
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Đổi mật khẩu thất bại";
       throw new Error(message);
     }
   },
@@ -181,22 +203,27 @@ export const authService = {
           fullName: d.fullName,
           phoneNumber: d.phoneNumber,
           role: d.role,
+
+          rating: d.rating ?? 0,
+          totalTrips: d.totalTrips ?? 0,
+
           balance: d.balance || 0,
           avatar: d.avatar,
           isActive: d.isActive !== false,
           isOnline: d.isOnline,
-          createdAt: d.createdAt, // ✅ Giữ nguyên từ API (đã là string)
+          createdAt: d.createdAt, 
           ...(d.vehicleInfo && { vehicleInfo: d.vehicleInfo }),
           ...(d.driverStatus && { driverStatus: d.driverStatus }),
-          ...(d.rating && { rating: d.rating }),
-          ...(d.totalTrips && { totalTrips: d.totalTrips }),
         };
 
         localStorage.setItem("user", JSON.stringify(updatedUser));
         return updatedUser;
       }
     } catch (error) {
-      console.warn("Backend update not available, using localStorage:", error.message);
+      console.warn(
+        "Backend update not available, using localStorage:",
+        error.message
+      );
     }
 
     // Fallback to local update via existing stored user
@@ -227,21 +254,30 @@ export const authService = {
         fullName: d.fullName,
         phoneNumber: d.phoneNumber,
         role: d.role,
+
+        rating: d.rating ?? 0,
+        totalTrips: d.totalTrips ?? 0,
+
         balance: d.balance || 0,
-        avatar: d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
+        avatar:
+          d.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${d.id}`,
         isActive: d.isActive !== false,
         isOnline: d.isOnline,
-        createdAt: d.createdAt, // ✅ Giữ nguyên từ API (đã là string)
+        createdAt: d.createdAt, // Giữ nguyên từ API (đã là string)
         ...(d.vehicleInfo && { vehicleInfo: d.vehicleInfo }),
         ...(d.driverStatus && { driverStatus: d.driverStatus }),
-        ...(d.rating && { rating: d.rating }),
-        ...(d.totalTrips && { totalTrips: d.totalTrips }),
+        
       };
 
       localStorage.setItem("user", JSON.stringify(user));
       return user;
     } catch (error) {
-      const message = error.response?.data?.message || error.message || "Lấy thông tin người dùng thất bại";
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        error.response?.data?.error ||
+        "Lấy thông tin người dùng thất bại";
       throw new Error(message);
     }
   },
